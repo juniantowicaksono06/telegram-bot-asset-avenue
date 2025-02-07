@@ -96,11 +96,11 @@ def handle_message(update: Update, context: CallbackContext):
         add_points(update, user.id, message_id, chat_id, "message", MESSAGE_POINTS, MAX_MESSAGE_POINTS)
 
 def myscore(update: Update, context: CallbackContext):
-    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
     # Command to show users score
     chat_id = update.message.chat_id
     if chat_id > 0:
         return 
+    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
     user_id = update.message.from_user.id
     date = datetime.datetime.now().strftime("%Y-%m-%d")
     data = query("SELECT COALESCE(SUM(score), 0) as score, first_name, last_name FROM scores LEFT JOIN users ON scores.user_id = users.id WHERE users.user_id = %s AND scores.date = %s AND group_id = %s", (user_id, date, chat_id), single=True)
@@ -122,10 +122,10 @@ def myscore(update: Update, context: CallbackContext):
     update.message.reply_text(msg)
 
 def leaderboard(update: Update, context: CallbackContext):
-    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
     chat_id = update.message.chat_id
     if chat_id > 0:
         return 
+    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
     # Command to show leaderboard
     date = datetime.datetime.now().strftime("%Y-%m-%d")
     data = query(
@@ -147,14 +147,17 @@ def leaderboard(update: Update, context: CallbackContext):
     update.message.reply_text(leaderboard_text, parse_mode="Markdown")
 
 def handle_start(update: Update, context: CallbackContext):
+    chat_id = update.message.chat_id
+    if chat_id > 0:
+        return 
     register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
     update.message.reply_text(f"Hello {update.message.from_user.username}!")
 
 def export_scores(update: Update, context: CallbackContext):
-    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name)
     chat_id = update.message.chat_id
     if chat_id > 0:
         return 
+    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, chat_id)
     message_id = update.message.message_id
     chat_id = update.message.chat_id
     date = datetime.datetime.now().strftime("%Y-%m-%d")
