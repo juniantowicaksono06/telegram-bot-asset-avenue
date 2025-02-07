@@ -17,18 +17,22 @@ MESSAGE_POINTS = 100
 MEDIA_POINTS = 200
 MAX_MESSAGE_POINTS = 700
 MAX_MEDIA_POINTS = 400
-REFERRAL_ACTIVE_DAYS = 3
+REFERRAL_ACTIVE_DAYS = 10
 REFERRED_MIN_ACTIVATION = 3
 REFERRAL_POINTS = 200
+REFERRAL_LINK_ACTIVE_DAYS = 3
 
 def register_user(user_id, username, first_name, last_name, group_id):
     # Register user if not exists
     data = query("SELECT user_id FROM users WHERE user_id = %s", (user_id,), single=True)
     if(data) is None:
-        current_date = datetime.datetime.now().strftime("%Y-%m-%d")
-        data_user = query("SELECT id FROM users WHERE user_id = %s", (user_id,), single=True)
-        command("INSERT INTO scores (user_id, message_id, activity_type, score, date, group_id) VALUES (%s, %s, %s, %s, %s, %s)", (data_user['id'], 0, 'registration', 100, current_date, group_id))
-        return command("INSERT INTO users (user_id, username, first_name, last_name) VALUES (%s, %s, %s, %s)", (user_id, username, first_name, last_name)) 
+        result = command("INSERT INTO users (user_id, username, first_name, last_name) VALUES (%s, %s, %s, %s)", (user_id, username, first_name, last_name)) 
+        if result is not None:
+            current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+            data_user = query("SELECT id FROM users WHERE user_id = %s", (user_id,), single=True)
+            print(data_user['id'], 0, 'registration', 100, current_date, group_id)
+            command("INSERT INTO scores (user_id, message_id, activity_type, score, date, group_id) VALUES (%s, %s, %s, %s, %s, %s)", (data_user['id'], 0, 'registration', 100, current_date, group_id))
+
         
     return True
 
@@ -216,7 +220,7 @@ def make_referral(update: Update, context: CallbackContext):
     invite_link = context.bot.create_chat_invite_link(chat_id=update.message.chat_id, creates_join_request=True)
     referral_message = f"Here is your referral link: {invite_link.invite_link}\n"
     current_date = datetime.datetime.now()
-    expire_date = current_date + datetime.timedelta(days=REFERRAL_ACTIVE_DAYS)
+    expire_date = current_date + datetime.timedelta(days=REFERRAL_LINK_ACTIVE_DAYS)
     expire_date = expire_date.strftime("%Y-%m-%d %H:%M:%S")
     data = query("SELECT id FROM users WHERE user_id = %s", (update.message.from_user.id,), single=True)
     if command("INSERT INTO referral_links (user_id, link, group_id, expire_date) VALUES (%s, %s, %s, %s)", (data['id'], invite_link.invite_link, update.message.chat_id, expire_date)) is not None:
@@ -225,12 +229,12 @@ def make_referral(update: Update, context: CallbackContext):
         update.message.reply_text("Failed to create referral link.")
 
 def handle_join_request(update: Update, context: CallbackContext):
-    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
     join_request = update.chat_join_request
+    register_user(join_request.from_user.id, join_request.from_user.username, join_request.from_user.first_name, join_request.from_user.last_name, join_request.chat.id)
     user = join_request.from_user
     invite_link = join_request.invite_link.invite_link
     current_date = datetime.datetime.now()
-    expire_date = current_date + datetime.timedelta(days=REFERRED_MIN_ACTIVATION)
+    expire_date = current_date + datetime.timedelta(days=REFERRAL_ACTIVE_DAYS)
     expire_date = expire_date.strftime("%Y-%m-%d %H:%M:%S")
     data = query("SELECT referral_links.id, users.user_id, is_used FROM referral_links LEFT JOIN users ON referral_links.user_id = users.id WHERE link = %s and group_id = %s", (invite_link, join_request.chat.id), single=True)
     print(data)
@@ -247,7 +251,7 @@ def handle_join_request(update: Update, context: CallbackContext):
         join_request.approve()
 
 def main():
-    global MESSAGE_POINTS, MEDIA_POINTS, MAX_MESSAGE_POINTS, MAX_MEDIA_POINTS, REFERRAL_ACTIVE_DAYS, REFERRED_MIN_ACTIVATION, REFERRAL_POINTS
+    global MESSAGE_POINTS, MEDIA_POINTS, MAX_MESSAGE_POINTS, MAX_MEDIA_POINTS, REFERRAL_ACTIVE_DAYS, REFERRED_MIN_ACTIVATION, REFERRAL_POINTS, REFERRAL_LINK_ACTIVE_DAYS
     updater = Updater(token=os.getenv("TELEGRAM_BOT_TOKEN"), use_context=True)
     dp = updater.dispatcher
 
@@ -260,6 +264,7 @@ def main():
         REFERRAL_ACTIVE_DAYS = int(bot_config['REFERRAL_ACTIVE_DAYS'])
         REFERRED_MIN_ACTIVATION = int(bot_config['REFERRED_MIN_ACTIVATION'])
         REFERRAL_POINTS = int(bot_config['REFERRAL_POINTS'])
+        REFERRAL_LINK_ACTIVE_DAYS = int(bot_config['REFERRAL_LINK_ACTIVE_DAYS'])
 
     dp.add_handler(CommandHandler("start", handle_start))
     dp.add_handler(CommandHandler("myscore", myscore))

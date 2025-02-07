@@ -4,51 +4,6 @@ from dotenv import load_dotenv
 import os
 load_dotenv()
 
-# CREATE TABLE IF NOT EXISTS referrals (
-#     id INT AUTO_INCREMENT PRIMARY KEY,
-#     referrer_id BIGINT NOT NULL,
-#     referred_id BIGINT NOT NULL,
-#     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-#     FOREIGN KEY (referrer_id) REFERENCES users(user_id) ON DELETE CASCADE,
-#     FOREIGN KEY (referred_id) REFERENCES users(user_id) ON DELETE CASCADE
-# );
-
-# CREATE TABLE IF NOT EXISTS polls (
-#     id INT AUTO_INCREMENT PRIMARY KEY,
-#     question TEXT NOT NULL,
-#     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-# );
-
-# CREATE TABLE IF NOT EXISTS poll_votes (
-#     id INT AUTO_INCREMENT PRIMARY KEY,
-#     poll_id INT NOT NULL,
-#     user_id BIGINT NOT NULL,
-#     `option` TEXT NOT NULL,
-#     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-#     FOREIGN KEY (poll_id) REFERENCES polls(id) ON DELETE CASCADE,
-#     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
-# );
-
-# CREATE TABLE IF NOT EXISTS competitions (
-#     id INT AUTO_INCREMENT PRIMARY KEY,
-#     name VARCHAR(255) NOT NULL,
-#     description TEXT,
-#     start_date TIMESTAMP NOT NULL,
-#     end_date TIMESTAMP NOT NULL,
-#     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-# );
-
-# CREATE TABLE IF NOT EXISTS competition_entries (
-#     id INT AUTO_INCREMENT PRIMARY KEY,
-#     competition_id INT NOT NULL,
-#     user_id BIGINT NOT NULL,
-#     media_url TEXT NOT NULL,
-#     votes INT DEFAULT 0,
-#     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-#     FOREIGN KEY (competition_id) REFERENCES competitions(id) ON DELETE CASCADE,
-#     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
-# );
-
 # Define the SQL statements for table creation
 SQL_STATEMENTS = """
 CREATE TABLE IF NOT EXISTS users (
@@ -67,7 +22,7 @@ CREATE TABLE IF NOT EXISTS scores (
     `message_id` BIGINT NOT NULL,
     score INT NOT NULL,
     `date` DATE NOT NULL,
-    activity_type ENUM('message', 'media', 'poll', 'competition', 'referral') NOT NULL,
+    activity_type ENUM('message','media','poll','competition','referral','registration') NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
@@ -80,6 +35,7 @@ CREATE TABLE IF NOT EXISTS bot_config (
     `MAX_MEDIA_POINTS` INT NOT NULL,
     `REFERRED_MIN_ACTIVATION` INT NOT NULL,
     `REFERRAL_ACTIVE_DAYS` INT NOT NULL,
+    `REFERRAL_LINK_ACTIVE_DAYS` INT NOT NULL,
     `REFERRAL_POINTS` INT NOT NULL,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
