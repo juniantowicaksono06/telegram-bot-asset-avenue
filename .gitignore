@@ -1,0 +1,6 @@
+.env
+tes.py
+export_xls
+**/__pycache__/
+venv
+env
