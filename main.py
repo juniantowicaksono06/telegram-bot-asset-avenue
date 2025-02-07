@@ -298,7 +298,7 @@ def export_scores(update: Update, context: CallbackContext):
 
     if not os.path.exists("export_xls"):
         os.mkdir("export_xls")
-    filename = f"export_xls/score_{chat_id}_{message_id}.xlsx, xls"
+    filename = f"export_xls/score_{chat_id}_{message_id}.xlsx"
     # Save the excel file
     wb.save(filename)
 
