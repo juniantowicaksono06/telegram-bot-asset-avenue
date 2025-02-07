@@ -129,12 +129,11 @@ def leaderboard(update: Update, context: CallbackContext):
     # Command to show leaderboard
     date = datetime.datetime.now().strftime("%Y-%m-%d")
     data = query(
-        "SELECT u.username, COALESCE(SUM(s.score), 0) as total_points FROM users u "
-        "LEFT JOIN scores s ON u.id = s.user_id "
-        "WHERE group_id = %s"
-        "GROUP BY u.user_id ORDER BY total_points DESC", params=(update.message.chat_id,), single=False
+        "SELECT u.username, COALESCE(SUM(s.score), 0) AS total_points  FROM users u  LEFT JOIN scores s ON u.id = s.user_id  WHERE u.group_id = %s  GROUP BY u.id, u.username  ORDER BY total_points DESC;", params=(update.message.chat_id,), single=False
     )
-    leaderboard_text = "🏆 **Leaderboard Grup** 🏆\n\n"
+    leaderboard_text = "🏆 **Leaderboard Group** 🏆\n\n"
+    if data is None:
+        update.message.reply_text("Leaderboard is empty.")
     for i, row in enumerate(data, start=1):
         total_point = row['total_points']
         username = row['username'] if row['username'] else "Unknown"
