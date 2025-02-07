@@ -108,8 +108,8 @@ def myscore(update: Update, context: CallbackContext):
     data_leaderboard = query(
         "SELECT u.username, COALESCE(SUM(s.score), 0) as total_points, u.user_id FROM users u "
         "LEFT JOIN scores s ON u.id = s.user_id "
-        "WHERE group_id = %s AND s.date = %s"
-        "GROUP BY u.user_id ORDER BY total_points DESC", params=(update.message.chat_id, date), single=False
+        "WHERE group_id = %s"
+        "GROUP BY u.user_id ORDER BY total_points DESC", params=(update.message.chat_id, ), single=False
     )
 
     rank = 0
