@@ -38,7 +38,7 @@ def register_user(user_id, username, first_name, last_name, group_id):
 
 def get_daily_points(user_id, activity_type, group_id):
     """Hitung total poin harian pengguna berdasarkan jenis aktivitas."""
-    data = query("SELECT COALESCE(SUM(score), 0) as score FROM scores LEFT JOIN users ON scores.user_id = users.id WHERE users.user_id = %s AND activity_type = %s AND DATE(`date`) = CURDATE()", (user_id, activity_type), single=True)
+    data = query("SELECT COALESCE(SUM(score), 0) as score FROM scores LEFT JOIN users ON scores.user_id = users.id WHERE users.user_id = %s AND activity_type = %s AND DATE(`date`) = CURDATE() AND group_id = %s", (user_id, activity_type, group_id), single=True)
     print(data)
     return data['score']
 
