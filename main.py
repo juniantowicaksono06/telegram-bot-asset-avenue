@@ -200,7 +200,7 @@ def leaderboard(update: Update, context: CallbackContext):
         " WHERE group_id = %s"
         " GROUP BY u.user_id ORDER BY total_points DESC, `date` DESC", params=(update.message.chat_id,), single=False
     )
-    leaderboard_text = "🏆 **Leaderboard Group** 🏆\n\n"
+    leaderboard_text = "🏆 Leaderboard Group 🏆\n\n"
     if data is None:
         update.message.reply_text("Leaderboard is empty.")
     for i, row in enumerate(data, start=1):
@@ -210,7 +210,7 @@ def leaderboard(update: Update, context: CallbackContext):
             leaderboard_text += f"{i}. {username} - {total_point} points\n"
         else:
             leaderboard_text += f"{i}. {username} - {total_point} point\n"
-    update.message.reply_text(leaderboard_text, parse_mode="Markdown")
+    update.message.reply_text(leaderboard_text)
 
 def handle_start(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
