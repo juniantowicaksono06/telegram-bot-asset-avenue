@@ -59,8 +59,8 @@ CREATE TABLE IF NOT EXISTS referrals (
     expire_date DATETIME NOT NULL,
     status TINYINT DEFAULT 0,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (referrer_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (referred_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (referrer_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (referred_id) REFERENCES users(user_id) ON DELETE CASCADE,
     FOREIGN KEY (link_id) REFERENCES referral_links(id) ON DELETE CASCADE
 );
 
