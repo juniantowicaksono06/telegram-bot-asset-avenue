@@ -36,7 +36,7 @@ def register_user(user_id, username, first_name, last_name, group_id):
         
     return True
 
-def get_daily_points(user_id, activity_type):
+def get_daily_points(user_id, activity_type, group_id):
     """Hitung total poin harian pengguna berdasarkan jenis aktivitas."""
     data = query("SELECT COALESCE(SUM(score), 0) as score FROM scores LEFT JOIN users ON scores.user_id = users.id WHERE users.user_id = %s AND activity_type = %s AND DATE(`date`) = CURDATE()", (user_id, activity_type), single=True)
     print(data)
@@ -44,7 +44,7 @@ def get_daily_points(user_id, activity_type):
 
 def add_points(update: Update, user_id, message_id, group_id, activity_type, points, max_points):
     """Tambahkan poin ke database dengan batas maksimal per hari."""
-    current_points = int(get_daily_points(user_id, activity_type))
+    current_points = int(get_daily_points(user_id, activity_type, update.message.chat_id))
     # Check if user is already referred
     referred = query("SELECT id, status, referrer_id, expire_date FROM referrals WHERE referred_id = %s AND status = 0", (user_id,), single=True)
     # For referral
