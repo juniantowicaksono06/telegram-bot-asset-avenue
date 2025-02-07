@@ -21,11 +21,15 @@ REFERRAL_ACTIVE_DAYS = 3
 REFERRED_MIN_ACTIVATION = 3
 REFERRAL_POINTS = 200
 
-def register_user(user_id, username, first_name, last_name):
+def register_user(user_id, username, first_name, last_name, group_id):
     # Register user if not exists
     data = query("SELECT user_id FROM users WHERE user_id = %s", (user_id,), single=True)
     if(data) is None:
+        current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+        data_user = query("SELECT id FROM users WHERE user_id = %s", (user_id,), single=True)
+        command("INSERT INTO scores (user_id, message_id, activity_type, score, date, group_id) VALUES (%s, %s, %s, %s, %s, %s)", (data_user['id'], 0, 'registration', 100, current_date, group_id))
         return command("INSERT INTO users (user_id, username, first_name, last_name) VALUES (%s, %s, %s, %s)", (user_id, username, first_name, last_name)) 
+        
     return True
 
 def get_daily_points(user_id, activity_type):
@@ -77,7 +81,7 @@ def handle_message(update: Update, context: CallbackContext):
     if chat_id > 0:
         return  
 
-    res = register_user(user.id, user.username, user.first_name, user.last_name)
+    res = register_user(user.id, user.username, user.first_name, user.last_name, chat_id)
     if res is None:
         print("Failed to register user!")
         return
@@ -88,6 +92,7 @@ def handle_message(update: Update, context: CallbackContext):
         add_points(update, user.id, message_id, chat_id, "message", MESSAGE_POINTS, MAX_MESSAGE_POINTS)
 
 def myscore(update: Update, context: CallbackContext):
+    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
     # Command to show users score
     chat_id = update.message.chat_id
     if chat_id > 0:
@@ -113,6 +118,7 @@ def myscore(update: Update, context: CallbackContext):
     update.message.reply_text(msg)
 
 def leaderboard(update: Update, context: CallbackContext):
+    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
     chat_id = update.message.chat_id
     if chat_id > 0:
         return 
@@ -121,8 +127,8 @@ def leaderboard(update: Update, context: CallbackContext):
     data = query(
         "SELECT u.username, COALESCE(SUM(s.score), 0) as total_points FROM users u "
         "LEFT JOIN scores s ON u.id = s.user_id "
-        "WHERE group_id = %s AND s.date = %s"
-        "GROUP BY u.user_id ORDER BY total_points DESC", params=(update.message.chat_id, date), single=False
+        "WHERE group_id = %s"
+        "GROUP BY u.user_id ORDER BY total_points DESC", params=(update.message.chat_id,), single=False
     )
     leaderboard_text = "🏆 **Leaderboard Grup** 🏆\n\n"
     for i, row in enumerate(data, start=1):
@@ -135,10 +141,11 @@ def leaderboard(update: Update, context: CallbackContext):
     update.message.reply_text(leaderboard_text, parse_mode="Markdown")
 
 def handle_start(update: Update, context: CallbackContext):
-    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name)
+    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
     update.message.reply_text(f"Hello {update.message.from_user.username}!")
 
 def export_scores(update: Update, context: CallbackContext):
+    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name)
     chat_id = update.message.chat_id
     if chat_id > 0:
         return 
@@ -148,8 +155,8 @@ def export_scores(update: Update, context: CallbackContext):
     data = query(
         "SELECT u.username, first_name, last_name, COALESCE(SUM(s.score), 0) as total_points FROM users u "
         "LEFT JOIN scores s ON u.id = s.user_id "
-        "WHERE group_id = %s AND s.date = %s"
-        "GROUP BY u.user_id ORDER BY total_points DESC", dictionary=False, params=(update.message.chat_id, date), single=False
+        "WHERE group_id = %s"
+        "GROUP BY u.user_id ORDER BY total_points DESC", dictionary=False, params=(update.message.chat_id,), single=False
     )
 
     if(not data):
@@ -202,6 +209,7 @@ def export_scores(update: Update, context: CallbackContext):
     update.message.reply_document(document=open(filename, 'rb'))
 
 def make_referral(update: Update, context: CallbackContext):
+    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
     chat_id = update.message.chat_id
     if chat_id > 0:
         return 
@@ -217,6 +225,7 @@ def make_referral(update: Update, context: CallbackContext):
         update.message.reply_text("Failed to create referral link.")
 
 def handle_join_request(update: Update, context: CallbackContext):
+    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
     join_request = update.chat_join_request
     user = join_request.from_user
     invite_link = join_request.invite_link.invite_link
