@@ -53,8 +53,8 @@ CREATE TABLE IF NOT EXISTS referral_links (
 
 CREATE TABLE IF NOT EXISTS referrals (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    referrer_id INT NOT NULL,
-    referred_id INT NOT NULL,
+    referrer_id BIGINT NOT NULL,
+    referred_id BIGINT NOT NULL,
     link_id INT NOT NULL,
     expire_date DATETIME NOT NULL,
     status TINYINT DEFAULT 0,
