@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 from config.db import connect_to_mysql, command, query
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, ChatJoinRequestHandler, CallbackQueryHandler
 import os
 import pandas as pd
@@ -14,6 +14,7 @@ load_dotenv()
 from stage import check_stage, upload_stage, finish_upload_stage
 import re
 import threading
+from function import check_whitelist_user, get_all_groups
 
 # Aturan poin
 MESSAGE_POINTS = 100
@@ -27,6 +28,13 @@ MAX_LEADERBOARD_DATA_PER_PAGE = 5
 MAX_REFERRAL_PER_DAY = 2
 
 def register_user(user_id, username, first_name, last_name, group_id):
+    # Register group if not exists
+    data_group = query("SELECT group_id FROM `groups` WHERE group_id = %s", (group_id,), single=True)
+    if(data_group) is None:
+        bot = Bot(os.getenv("TELEGRAM_BOT_TOKEN"))
+        chat = bot.get_chat(chat_id=group_id)
+        group_name = chat.title
+        command("INSERT INTO `groups` (group_id, group_name) VALUES (%s, %s)", (group_id, group_name))
     # Register user if not exists
     data = query("SELECT user_id FROM users WHERE user_id = %s", (user_id,), single=True)
     if(data) is None:
@@ -103,26 +111,31 @@ def add_points(update: Update, user_id, message_id, group_id, activity_type, poi
 
 def process_upload_points(update: Update, context: CallbackContext):
     # Process uploaded file
-    document = update.message.document
-    file_path = f"./uploads"
-    if not os.path.exists(file_path):
-        os.mkdir(file_path)
-    user = update.message.from_user
-    now = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
-    uploaded_filename = f"uploaded_{user.id}_{update.message.chat_id}{now}.xlsx, xls"
-    file_path = os.path.join(file_path, uploaded_filename)
-    document.get_file().download(file_path)
-    df = pd.read_excel(file_path)
-    usernames = df["username"]
-    points = df["points"]
-    for username, point in zip(usernames, points): 
-        username = re.sub(r"^@\S+\s*", "", username)
-        current_date = datetime.datetime.now().strftime("%Y-%m-%d")
-        data_user = query("SELECT id FROM users WHERE username = %s", (username,), single=True)
-        if data_user is not None:
-            command("INSERT INTO scores (user_id, message_id, activity_type, score, date, group_id) VALUES (%s, %s, %s, %s, %s, %s)", (data_user['id'], 0, 'extra point', point, current_date, update.message.chat_id))
-    os.remove(file_path)
-    return True
+    try:
+        document = update.message.document
+        file_path = f"./uploads"
+        if not os.path.exists(file_path):
+            os.mkdir(file_path)
+        user = update.message.from_user
+        now = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
+        uploaded_filename = f"uploaded_{user.id}_{update.message.chat_id}{now}.xlsx, xls"
+        file_path = os.path.join(file_path, uploaded_filename)
+        document.get_file().download(file_path)
+        df = pd.read_excel(file_path)
+        usernames = df["username"]
+        points = df["points"]
+        for username, point in zip(usernames, points): 
+            username = re.sub(r"^@\S+\s*", "", username)
+            current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+            data_user = query("SELECT id FROM users WHERE username = %s", (username,), single=True)
+            if data_user is not None:
+                command("INSERT INTO scores (user_id, message_id, activity_type, score, date, group_id) VALUES (%s, %s, %s, %s, %s, %s)", (data_user['id'], 0, 'extra point', point, current_date, update.message.chat_id))
+        os.remove(file_path)
+        return True
+    except Exception as e:
+        print(f"Error processing uploaded file: {e}")
+        update.message.reply_text(f"Error processing uploaded file. File format is not valid. Try use the excel from /template_upload_points")
+        return False
         
 
 def handle_message(update: Update, context: CallbackContext):
@@ -133,14 +146,17 @@ def handle_message(update: Update, context: CallbackContext):
 
     # Make sure only able to run on group
     if chat_id > 0:
-        return  
-
-    res = register_user(user.id, user.username, user.first_name, user.last_name, chat_id)
-    if res is None:
-        print("Failed to register user!")
-        return
+        is_whitelist = check_whitelist_user(update.message.from_user.id)
+        if not is_whitelist:
+            update.message.reply_text("You are not authorized to use this bot.")
+            return
+    else:
+        res = register_user(user.id, user.username, user.first_name, user.last_name, chat_id)
+        if res is None:
+            print("Failed to register user!")
+            return
     if update.message.photo or update.message.video or update.message.animation or update.message.document:
-        current_stage = check_stage(update.message.from_user.id, update.message.chat.id)
+        current_stage = check_stage(update.message.from_user.id)
         if current_stage == 1 and update.message.document:
             document = update.message.document
         
@@ -169,7 +185,7 @@ def handle_message(update: Update, context: CallbackContext):
             update.message.reply_text("The uploaded file is not an Excel file.")
             return
     else:
-        if check_stage(update.message.from_user.id, update.message.chat.id) == 1:
+        if check_stage(update.message.from_user.id) == 1:
             update.message.reply_text("You are in the process of uploading points with excel file. Please upload xlsx, xls file format only. Use /finish_upload to cancel the process.")
             return
         add_points(update, user.id, message_id, chat_id, "message", MESSAGE_POINTS, MAX_MESSAGE_POINTS)
@@ -180,7 +196,7 @@ def myscore(update: Update, context: CallbackContext):
     if chat_id > 0:
         return 
     register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
-    if check_stage(update.message.from_user.id, update.message.chat.id) == 1:
+    if check_stage(update.message.from_user.id) == 1:
         update.message.reply_text("You are in the process of uploading points with excel file. Please upload xlsx, xls file format only. Use /finish_upload to cancel the process.")
         return
     user_id = update.message.from_user.id
@@ -218,7 +234,7 @@ def leaderboard(update: Update, context: CallbackContext):
         if chat_id > 0:
             return 
         register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
-        if check_stage(update.message.from_user.id, update.message.chat.id) == 1:
+        if check_stage(update.message.from_user.id) == 1:
             update.message.reply_text("You are in the process of uploading points with excel file. Please upload xlsx, xls file format only. Use /finish_upload to cancel the process.")
             return
     # Command to show leaderboard
@@ -273,22 +289,38 @@ def leaderboard(update: Update, context: CallbackContext):
 def handle_start(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     if chat_id > 0:
+        is_whitelist = check_whitelist_user(update.message.from_user.id)
+        if not is_whitelist:
+            update.message.reply_text("You are not authorized to use this bot.")
+            return
+        if check_stage(update.message.from_user.id) == 1:
+            update.message.reply_text("You are in the process of uploading points with excel file. Please upload xlsx, xls file format only. Use /finish_upload to cancel the process.")
+            return
+        update.message.reply_text("Hello! 👋🏽\n\nTelegram Bot Commands: \n\nExport Score - /export_scores\nUpload Points - /upload_points")
         return 
-    if check_stage(update.message.from_user.id, update.message.chat.id) == 1:
+    
+    if check_stage(update.message.from_user.id) == 1:
         update.message.reply_text("You are in the process of uploading points with excel file. Please upload xlsx, xls file format only. Use /finish_upload to cancel the process.")
         return
+    
     register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
-    msg = f"Hello {update.message.from_user.username} 👋🏽\n\nEngagement Tracking Commands: 📈\n\nCheck Progress - /myscore🥇\nLeaderboard - /leaderboard 📊\nInvite Friends - /create_referral👥"
+    msg = f"Hello {update.message.from_user.username} 👋🏽\n\nEngagement Tracking Commands: \n\nCheck Progress - /myscore🥇\nLeaderboard - /leaderboard 📊\nInvite Friends - /create_referral👥"
     update.message.reply_text(msg)
 
 def template_upload_points(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
-    if chat_id > 0:
+    if chat_id < 0:
         return 
-    if check_stage(update.message.from_user.id, update.message.chat.id) == 1:
+    
+    is_whitelist = check_whitelist_user(update.message.from_user.id)
+    if not is_whitelist:
+        update.message.reply_text("You are not authorized to use this bot.")
+        return
+
+    if check_stage(update.message.from_user.id) == 1:
         update.message.reply_text("You are in the process of uploading points with excel file. Please upload xlsx, xls file format only. Use /finish_upload to cancel the process.")
         return
-    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
+    # register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
     with open('excel_template/template_upload_points.xlsx', 'rb') as excel_file:
         context.bot.send_document(
             chat_id = chat_id,
@@ -300,22 +332,53 @@ def template_upload_points(update: Update, context: CallbackContext):
 def export_scores(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     if chat_id > 0:
+        is_whitelist = check_whitelist_user(update.message.from_user.id)
+        if not is_whitelist:
+            update.message.reply_text("You are not authorized to use this bot.")
+            return
+        if check_stage(update.message.from_user.id) == 1:
+            update.message.reply_text("You are in the process of uploading points with excel file. Please upload xlsx, xls file format only. Use /finish_upload to cancel the process.")
+            return
+    
+        # register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat.id)
+        groups = get_all_groups()
+        if groups is None:
+            update.message.reply_text("No groups found!")
+            return
+        if len(groups) > 1:
+            keyboard = InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(group['group_name'], callback_data=f"callback_export_scores_{group['group_id']}")
+                    ] for group in groups
+                ]
+            )
+            update.message.reply_text("Select a group to export scores:", reply_markup=keyboard)
+        else:
+            handle_export_scores(update, context, groups[0]['group_id'])
         return 
-    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, chat_id)
-    if check_stage(update.message.from_user.id, update.message.chat.id) == 1:
-        update.message.reply_text("You are in the process of uploading points with excel file. Please upload xlsx, xls file format only. Use /finish_upload to cancel the process.")
-        return
-    message_id = update.message.message_id
+
+def handle_export_scores(update: Update, context: CallbackContext, group_id):
+    q = update.callback_query
+    if q is not None:
+        q.answer()
+    chat_id = group_id
+    if chat_id > 0:
+        return 
     date = datetime.datetime.now().strftime("%Y-%m-%d")
     data = query(
         "SELECT u.username, first_name, last_name, COALESCE(SUM(s.score), 0) as total_points FROM users u "
         "LEFT JOIN scores s ON u.id = s.user_id "
         " WHERE group_id = %s"
-        " GROUP BY u.user_id ORDER BY total_points DESC, `date` DESC", dictionary=False, params=(update.message.chat_id,), single=False
+        " GROUP BY u.user_id ORDER BY total_points DESC, `date` DESC", dictionary=False, params=(group_id,), single=False
     )
 
     if(not data):
-        update.message.reply_text("No data found!")
+        if q is not None:
+            context.bot.delete_message(chat_id=q.message.chat_id, message_id=q.message.message_id)
+            context.bot.send_message(chat_id=chat_id, text="No data found!")
+        else:
+            update.message.reply_text("No data found!")
         return
     
     date = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -357,23 +420,28 @@ def export_scores(update: Update, context: CallbackContext):
 
     if not os.path.exists("export_xls"):
         os.mkdir("export_xls")
-    filename = f"export_xls/score_{chat_id}_{message_id}.xlsx"
+    date = datetime.datetime.now().strftime("%Y-%m-%d")
+    filename = f"export_xls/score_{chat_id}_{date}.xlsx"
     # Save the excel file
     wb.save(filename)
 
-    update.message.reply_document(document=open(filename, 'rb'))
+    if q is not None:
+        context.bot.delete_message(chat_id=q.message.chat_id, message_id=q.message.message_id)
+        context.bot.send_document(chat_id=q.message.chat_id, document=open(filename, 'rb'))
+    else:
+        update.message.reply_document(document=open(filename, 'rb'))
 
 def create_referral(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     if chat_id > 0:
         return 
     register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
-    if check_stage(update.message.from_user.id, update.message.chat.id) == 1:
+    if check_stage(update.message.from_user.id) == 1:
         update.message.reply_text("You are in the process of uploading points with excel file. Please upload xlsx, xls file format only. Use /finish_upload to cancel the process.")
         return
     invite_link = context.bot.create_chat_invite_link(chat_id=update.message.chat_id, creates_join_request=True)
     referral_message = f"Here is your referral link: {invite_link.invite_link}\n"
-    current_date = datetime.datetime.now()
+    # current_date = datetime.datetime.now()
     data = query("SELECT id FROM users WHERE user_id = %s", (update.message.from_user.id,), single=True)
     if command("INSERT INTO referral_links (user_id, link, group_id) VALUES (%s, %s, %s)", (data['id'], invite_link.invite_link, update.message.chat_id)) is not None:
         update.message.reply_text(referral_message, parse_mode="Markdown")
@@ -395,20 +463,55 @@ def handle_join_request(update: Update, context: CallbackContext):
 def upload_points(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     if chat_id > 0:
+        is_whitelist = check_whitelist_user(update.message.from_user.id)
+        if not is_whitelist:
+            update.message.reply_text("You are not authorized to use this bot.")
+            return
+        if check_stage(update.message.from_user.id) == 1:
+            update.message.reply_text("You are in the process of uploading points with excel file. Please upload xlsx, xls file format only. Use /finish_upload to cancel the process.")
+            return
+    
+        # register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat.id)
+        groups = get_all_groups()
+        if groups is None:
+            update.message.reply_text("No groups found!")
+            return
+        if len(groups) > 1:
+            keyboard = InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(group['group_name'], callback_data=f"callback_upload_points_{group['group_id']}")
+                    ] for group in groups
+                ]
+            )
+            update.message.reply_text("Select a group to upload points:", reply_markup=keyboard)
+        else:
+            handle_upload_points(update, context, groups[0]['group_id'])
         return 
-    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat.id)
-    admins = context.bot.get_chat_administrators(chat_id)
-    if not any((admin.user.id == update.message.from_user.id and admin.status == "creator") or (admin.user.id == update.message.from_user.id and admin.status == "administrator") for admin in admins):
-        update.message.reply_text("You are not authorized to use this command.")
-        return
-    if check_stage(update.message.from_user.id, update.message.chat.id) == 1:
-        update.message.reply_text("You are in the process of uploading points with excel file. Please upload xlsx, xls file format only. Use /finish_upload to cancel the process.")
+
+def handle_upload_points(update: Update, context: CallbackContext, group_id):
+    q = update.callback_query
+    if q is not None:
+        q.answer()
+        chat_id = q.message.chat_id
+    else:
+        chat_id = update.message.from_user.id
+    if check_stage(chat_id) == 1:
+        if q is not None:
+            context.bot.delete_message(chat_id=chat_id, message_id=q.message.message_id)
+            context.bot.send_message(chat_id=q.message.chat_id, text="You are in the process of uploading points with excel file. Please upload xlsx, xls file format only. Use /finish_upload to cancel the process.")
+        else:
+            update.message.reply_text("You are in the process of uploading points with excel file. Please upload xlsx, xls file format only. Use /finish_upload to cancel the process.")
         return
     else:
-        user = update.message.from_user
-        upload_stage(user.id, update.message.chat_id)
-        update.message.reply_text("Please upload xlsx, xls file format only to add points.")
+        upload_stage(chat_id)
+        if q is not None:
+            context.bot.delete_message(chat_id=chat_id, message_id=q.message.message_id)
+            context.bot.send_message(chat_id=q.message.chat_id, text="Please upload xlsx, xls file format only to add points.")
+        else:
+            update.message.reply_text("Please upload xlsx, xls file format only to add points.")
         return
+
 
 def handle_query_callback(update: Update, context: CallbackContext):
     q = update.callback_query
@@ -416,21 +519,22 @@ def handle_query_callback(update: Update, context: CallbackContext):
     if q.data.startswith("callback_leaderboard_"):
         leaderboard(update, context)
         return
+    elif q.data.startswith("callback_export_scores_"):
+        handle_export_scores(update, context, int(q.data.replace("callback_export_scores_", "")))
+        return
+    elif q.data.startswith("callback_upload_points_"):
+        handle_upload_points(update, context, int(q.data.replace("callback_upload_points_", "")))
+        return
 
 def finish_upload(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
-    if chat_id > 0:
-        return 
-    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat.id)
-    
-    admins = context.bot.get_chat_administrators(chat_id)
-    if not any((admin.user.id == update.message.from_user.id and admin.status == "creator") or (admin.user.id == update.message.from_user.id and admin.status == "administrator") for admin in admins):
-        update.message.reply_text("You are not authorized to use this command.")
+    if chat_id < 0:
         return
-    if check_stage(update.message.from_user.id, update.message.chat.id) == 1:
+    
+    if check_stage(chat_id) == 1:
         user = update.message.from_user
         update.message.reply_text("Upload file with excel format has been finished.")
-        finish_upload_stage(user.id, update.message.chat.id)
+        finish_upload_stage(user.id)
         return
     else:
         update.message.reply_text("You're not in the process of uploading points with excel file.")

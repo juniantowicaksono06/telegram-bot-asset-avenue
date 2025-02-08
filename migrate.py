@@ -71,12 +71,22 @@ CREATE TABLE IF NOT EXISTS referral_details (
 CREATE TABLE IF NOT EXISTS user_stage (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
-    group_id BIGINT NOT NULL,
     stage INT NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 ALTER TABLE scores MODIFY COLUMN activity_type ENUM('message','media','poll','competition','referral','registration','extra point') NOT NULL;
+
+CREATE TABLE IF NOT EXISTS whitelist_users_private (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS `groups` (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    group_id BIGINT NOT NULL UNIQUE,
+    group_name VARCHAR(255) NOT NULL
+);
 """
 
 def migrate_database():
