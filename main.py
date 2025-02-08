@@ -278,11 +278,7 @@ def handle_start(update: Update, context: CallbackContext):
         update.message.reply_text("You are in the process of uploading points with excel file. Please upload xlsx, xls file format only. Use /finish_upload to cancel the process.")
         return
     register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
-    msg = f"Hello {update.message.from_user.username}!\n\nCommands to Use in Telegram:\n- Check the leaderboard: /leaderboard\n- See your score: /myscore\n- Create a referral link: /create_referral\n- Export scores: /export_scores"
-    admins = context.bot.get_chat_administrators(chat_id)
-    if any((admin.user.id == update.message.from_user.id and admin.status == "creator") or (admin.user.id == update.message.from_user.id and admin.status == "administrator") for admin in admins):
-        msg += "\n- Upload points with excel file: /upload_points"
-
+    msg = f"Hello {update.message.from_user.username}\n\nTelegram Commands:\n\nLeaderboard - /leaderboard \nCheck Progress - /myscore \nInvite Friends - /create_referral"
     update.message.reply_text(msg)
 
 def template_upload_points(update: Update, context: CallbackContext):
