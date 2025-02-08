@@ -134,7 +134,7 @@ def process_upload_points(update: Update, context: CallbackContext):
         return True
     except Exception as e:
         print(f"Error processing uploaded file: {e}")
-        update.message.reply_text(f"Error processing uploaded file. File format is not valid. Try use the excel from /template_upload_points")
+        update.message.reply_text(f"Error processing uploaded file. File format is not valid. Try use the excel from /upload_points_template")
         return False
         
 
@@ -296,7 +296,7 @@ def handle_start(update: Update, context: CallbackContext):
         if check_stage(update.message.from_user.id) == 1:
             update.message.reply_text("You are in the process of uploading points with excel file. Please upload xlsx, xls file format only. Use /finish_upload to cancel the process.")
             return
-        update.message.reply_text("Hello! 👋🏽\n\nTelegram Bot Commands: \n\nExport Score - /export_scores\nUpload Points - /upload_points")
+        update.message.reply_text("Hello! 👋🏽\n\nTelegram Bot Commands: \n\nExport Score - /export_scores\nUpload Points - /upload_points\nDownload Upload Points Template /upload_points_template")
         return 
     
     if check_stage(update.message.from_user.id) == 1:
@@ -307,7 +307,7 @@ def handle_start(update: Update, context: CallbackContext):
     msg = f"Hello {update.message.from_user.username} 👋🏽\n\nEngagement Tracking Commands: \n\nCheck Progress - /myscore🥇\nLeaderboard - /leaderboard 📊\nInvite Friends - /create_referral👥"
     update.message.reply_text(msg)
 
-def template_upload_points(update: Update, context: CallbackContext):
+def upload_points_template(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     if chat_id < 0:
         return 
@@ -563,7 +563,7 @@ def main():
     dp.add_handler(CommandHandler("create_referral", create_referral))
     dp.add_handler(CommandHandler("finish_upload", finish_upload))
     dp.add_handler(CommandHandler("upload_points", upload_points))
-    dp.add_handler(CommandHandler("template_upload_points", template_upload_points))
+    dp.add_handler(CommandHandler("upload_points_template", upload_points_template))
     dp.add_handler(CallbackQueryHandler(handle_query_callback))
     dp.add_handler(ChatJoinRequestHandler(handle_join_request))
     dp.add_handler(MessageHandler(Filters.text | Filters.photo | Filters.video | Filters.animation | Filters.document, handle_message))
