@@ -23,8 +23,8 @@ MAX_MEDIA_POINTS = 400
 REFERRAL_ACTIVE_DAYS = 10
 REFERRED_MIN_ACTIVATION = 3
 REFERRAL_POINTS = 200
-REFERRAL_LINK_ACTIVE_DAYS = 3
 MAX_LEADERBOARD_DATA_PER_PAGE = 5
+MAX_REFERRAL_PER_DAY = 2
 
 def register_user(user_id, username, first_name, last_name, group_id):
     # Register user if not exists
@@ -55,24 +55,41 @@ def add_points(update: Update, user_id, message_id, group_id, activity_type, poi
     """Tambahkan poin ke database dengan batas maksimal per hari."""
     current_points = int(get_daily_points(user_id, activity_type, update.message.chat_id))
     # Check if user is already referred
-    referred = query("SELECT id, status, referrer_id, expire_date FROM referrals WHERE referred_id = %s AND status = 0", (user_id,), single=True)
+    referred = query("SELECT referrals.id, status, referred_id, referrer_id, referrals.created_at, group_id, DATE_FORMAT(DATE_ADD(referrals.created_at, INTERVAL 10 DAY), '%Y-%m-%d') as last_date FROM referrals LEFT JOIN referral_links ON referrals.link_id = referral_links.id WHERE referred_id = %s AND status = 0 AND group_id = %s", (user_id, group_id), single=True)
+    print(referred)
     # For referral
     current_date_now = datetime.datetime.now()
     if referred is not None:
         id = referred['id']
         referrer_id = referred['referrer_id']
-        referred_expire_date = referred['expire_date']
-        referred_details = query("SELECT COUNT(referral_details.id) as total_data FROM referrals LEFT JOIN referral_details ON referrals.id = referral_details.referral_id WHERE referrals.id = %s", (id,), single=True)
-        if referred_details is None:
-            command("INSERT INTO referral_details (referral_id) VALUES(%s)", (id,))
-        elif current_date_now > referred_expire_date  and referred_details['total_data'] < REFERRED_MIN_ACTIVATION:
-            command("UPDATE referrals SET status = %s WHERE referrer_id = %s", (2, referrer_id))
+        referred_id = referred['referred_id']
+        created_at = referred['created_at']
+        date_now = datetime.datetime.now()
+        date1 = date_now.strftime("%Y-%m-%d %H:%M:%S")
+        first_date_of_refered = created_at
+        last_date_of_referred = referred['last_date']
+        referred_details = query("SELECT COUNT(referral_details.id) as total_data FROM referrals LEFT JOIN referral_details ON referrals.id = referral_details.referral_id WHERE referrals.id = %s AND `date` BETWEEN %s AND %s", (id, first_date_of_refered, last_date_of_referred), single=True)
+        print(last_date_of_referred)
+        data_referrer = query("SELECT id, username FROM users WHERE user_id = %s", (referrer_id,), single=True)
+        date_obj = datetime.datetime.strptime(last_date_of_referred, "%Y-%m-%d")
+        print(referred_details)
+        if referred_details['total_data'] + 1 < REFERRED_MIN_ACTIVATION and date_now > date_obj:
+            command("UPDATE referrals SET status = %s WHERE referrer_id = %s", (2, referrer_id))    
+        elif referred_details['total_data'] + 1 < MAX_REFERRAL_PER_DAY:
+            command("INSERT INTO referral_details (referral_id, `date`) VALUES(%s, %s)", (id, date1))
         else:
-            print("KE SINI")
-            insert_referral_detail = command("INSERT INTO referral_details (referral_id) VALUES(%s)", (id,))
-            if referred_details['total_data'] + 1 >= REFERRED_MIN_ACTIVATION and insert_referral_detail is not None:
+            print(f"GOT A REFERRAL FOR USER {data_referrer['username']}")
+            insert_referral_detail = command("INSERT INTO referral_details (referral_id, `date`) VALUES(%s, %s)", (id, date1))
+            max_referred = query("SELECT COUNT(referral_details.referral_id) as total_data FROM referrals LEFT JOIN referral_links ON referrals.link_id = referral_links.id LEFT JOIN referral_details ON referrals.id = referral_details.referral_id WHERE referred_id = %s AND group_id = %s", (referred_id, group_id), single=True)
+
+            print(max_referred['total_data'] / REFERRED_MIN_ACTIVATION)
+            print(MAX_REFERRAL_PER_DAY)
+
+            if max_referred['total_data'] / REFERRED_MIN_ACTIVATION > MAX_REFERRAL_PER_DAY:
+                print(f"MAX REFFERAL REACHED FOR USER {data_referrer['username']}")
+
+            elif referred_details['total_data'] + 1 >= REFERRED_MIN_ACTIVATION and insert_referral_detail is not None:
                 command("UPDATE referrals SET status = %s WHERE referrer_id = %s", (1, referrer_id))
-                data_referrer = query("SELECT id, username FROM users WHERE user_id = %s", (referrer_id,), single=True)
                 print((data_referrer['id'], 0, 'referral', REFERRAL_POINTS, current_date_now.strftime("%Y-%m-%d %H:%M:%S"), group_id))
                 command("INSERT INTO scores (user_id, message_id, activity_type, score, date, group_id) VALUES (%s, %s, %s, %s, %s, %s)", (data_referrer['id'], 0, 'referral', REFERRAL_POINTS, current_date_now.strftime("%Y-%m-%d %H:%M:%S"), group_id))
                 update.message.reply_text(f"{data_referrer['username']} earned {REFERRAL_POINTS} points.")
@@ -212,10 +229,6 @@ def leaderboard(update: Update, context: CallbackContext):
         " GROUP BY u.user_id ORDER BY total_points DESC, `date` DESC", params=(chat_id,), single=False
     )
     leaderboard_text = "🏆 Leaderboard Group 🏆\n\n"
-    # dummy_users = [
-    #     '1. oyenbarbar98 - 600 points\n', 
-    #     '2. oyenbarbar98 - 600 points\n', 
-    # ]
     
     leaderboard_users = []
     if data is None:
@@ -224,6 +237,7 @@ def leaderboard(update: Update, context: CallbackContext):
         total_point = row['total_points']
         username = row['username'] if row['username'] else "Unknown"
         leaderboard_users.append(f"{i}. {username} - {total_point} points\n")
+    
     max_index = cut_data if len(leaderboard_users) > cut_data else len(leaderboard_users)
     cutted_data = leaderboard_users[(page-1) * MAX_LEADERBOARD_DATA_PER_PAGE:max_index]
     leaderboard_text += "".join(cutted_data)
@@ -264,7 +278,12 @@ def handle_start(update: Update, context: CallbackContext):
         update.message.reply_text("You are in the process of uploading points with excel file. Please upload xlsx, xls file format only. Use /finish_upload to cancel the process.")
         return
     register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
-    update.message.reply_text(f"Hello {update.message.from_user.username}!")
+    msg = f"Hello {update.message.from_user.username}!\n\nCommands to Use in Telegram:\n- Check the leaderboard: /leaderboard\n- See your score: /myscore\n- Create a referral link: /create_referral\n- Export scores: /export_scores"
+    admins = context.bot.get_chat_administrators(chat_id)
+    if any((admin.user.id == update.message.from_user.id and admin.status == "creator") or (admin.user.id == update.message.from_user.id and admin.status == "administrator") for admin in admins):
+        msg += "\n- Upload points with excel file: /upload_points"
+
+    update.message.reply_text(msg)
 
 def template_upload_points(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
@@ -359,10 +378,8 @@ def create_referral(update: Update, context: CallbackContext):
     invite_link = context.bot.create_chat_invite_link(chat_id=update.message.chat_id, creates_join_request=True)
     referral_message = f"Here is your referral link: {invite_link.invite_link}\n"
     current_date = datetime.datetime.now()
-    expire_date = current_date + datetime.timedelta(days=REFERRAL_LINK_ACTIVE_DAYS)
-    expire_date = expire_date.strftime("%Y-%m-%d %H:%M:%S")
     data = query("SELECT id FROM users WHERE user_id = %s", (update.message.from_user.id,), single=True)
-    if command("INSERT INTO referral_links (user_id, link, group_id, expire_date) VALUES (%s, %s, %s, %s)", (data['id'], invite_link.invite_link, update.message.chat_id, expire_date)) is not None:
+    if command("INSERT INTO referral_links (user_id, link, group_id) VALUES (%s, %s, %s)", (data['id'], invite_link.invite_link, update.message.chat_id)) is not None:
         update.message.reply_text(referral_message, parse_mode="Markdown")
     else:
         update.message.reply_text("Failed to create referral link.")
@@ -371,23 +388,13 @@ def handle_join_request(update: Update, context: CallbackContext):
     join_request = update.chat_join_request
     user = join_request.from_user
     invite_link = join_request.invite_link.invite_link
-    current_date = datetime.datetime.now()
-    expire_date = current_date + datetime.timedelta(days=REFERRAL_ACTIVE_DAYS)
-    expire_date = expire_date.strftime("%Y-%m-%d %H:%M:%S")
-    data = query("SELECT referral_links.id, users.user_id, is_used FROM referral_links LEFT JOIN users ON referral_links.user_id = users.id WHERE link = %s and group_id = %s", (invite_link, join_request.chat.id), single=True)
-    print(data)
+    data = query("SELECT referral_links.id, users.user_id FROM referral_links LEFT JOIN users ON referral_links.user_id = users.id WHERE link = %s and group_id = %s", (invite_link, join_request.chat.id), single=True)
     if data is not None:
-        if(data['is_used'] == 0):
-            print("Join with referrer link")
-            register_user(join_request.from_user.id, join_request.from_user.username, join_request.from_user.first_name, join_request.from_user.last_name, join_request.chat.id)
-            print((data['user_id'], user.id, data['id'], expire_date))
-            command("INSERT INTO referrals (referrer_id, referred_id, link_id, expire_date) VALUES (%s, %s, %s, %s)", (data['user_id'], user.id, data['id'], expire_date)) # Join with referrer link
-            command("UPDATE referral_links SET is_used = 1 WHERE id = %s", (data['id'],))
-            join_request.approve()
-        else:
-            join_request.decline()
-    else:
-        join_request.approve()
+        register_user(join_request.from_user.id, join_request.from_user.username, join_request.from_user.first_name, join_request.from_user.last_name, join_request.chat.id)
+        check_another_referral = query("SELECT COUNT(referrals.id) as total_data FROM referrals LEFT JOIN referral_links ON referrals.link_id = referral_links.id WHERE referred_id = %s and group_id = %s", (user.id, join_request.chat.id), single=True)
+        if check_another_referral['total_data'] == 0:
+            command("INSERT INTO referrals (referrer_id, referred_id, link_id) VALUES (%s, %s, %s)", (data['user_id'], user.id, data['id'])) # Join with referrer link
+    join_request.approve()
 
 def upload_points(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
@@ -429,7 +436,7 @@ def finish_upload(update: Update, conext: CallbackContext):
         update.message.reply_text("You're not in the process of uploading points with excel file.")
 
 def main():
-    global MESSAGE_POINTS, MEDIA_POINTS, MAX_MESSAGE_POINTS, MAX_MEDIA_POINTS, REFERRAL_ACTIVE_DAYS, REFERRED_MIN_ACTIVATION, REFERRAL_POINTS, REFERRAL_LINK_ACTIVE_DAYS, MAX_LEADERBOARD_DATA_PER_PAGE
+    global MESSAGE_POINTS, MEDIA_POINTS, MAX_MESSAGE_POINTS, MAX_MEDIA_POINTS, REFERRAL_ACTIVE_DAYS, REFERRED_MIN_ACTIVATION, REFERRAL_POINTS, MAX_LEADERBOARD_DATA_PER_PAGE, MAX_REFERRAL_PER_DAY
     updater = Updater(token=os.getenv("TELEGRAM_BOT_TOKEN"), use_context=True)
     dp = updater.dispatcher
 
@@ -442,8 +449,8 @@ def main():
         REFERRAL_ACTIVE_DAYS = int(bot_config['REFERRAL_ACTIVE_DAYS'])
         REFERRED_MIN_ACTIVATION = int(bot_config['REFERRED_MIN_ACTIVATION'])
         REFERRAL_POINTS = int(bot_config['REFERRAL_POINTS'])
-        REFERRAL_LINK_ACTIVE_DAYS = int(bot_config['REFERRAL_LINK_ACTIVE_DAYS'])
         MAX_LEADERBOARD_DATA_PER_PAGE = int(bot_config['MAX_LEADERBOARD_DATA_PER_PAGE'])
+        MAX_REFERRAL_PER_DAY = int(bot_config['MAX_REFERRAL_PER_DAY'])
 
     dp.add_handler(CommandHandler("start", handle_start))
     dp.add_handler(CommandHandler("myscore", myscore))
