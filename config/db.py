@@ -44,6 +44,9 @@ def query(sql, params=None, dictionary=True, single=False):
     except Exception as e:
         print(f"Error executing SQL statement: {e}")
         return None
+    finally:
+        if conn is not None:
+            conn.close()
 
 def command(sql, params=None):
     conn = connect_to_mysql()
@@ -61,3 +64,6 @@ def command(sql, params=None):
         conn.rollback()
         print(f"Error executing SQL statement: {e}")
         return None
+    finally:
+        if conn is not None:
+            conn.close()

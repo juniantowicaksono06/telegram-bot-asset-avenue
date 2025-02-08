@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 from config.db import connect_to_mysql, command, query
-from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, ChatJoinRequestHandler
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, ChatJoinRequestHandler, CallbackQueryHandler
 import os
 import pandas as pd
 
@@ -24,6 +24,7 @@ REFERRAL_ACTIVE_DAYS = 10
 REFERRED_MIN_ACTIVATION = 3
 REFERRAL_POINTS = 200
 REFERRAL_LINK_ACTIVE_DAYS = 3
+MAX_LEADERBOARD_DATA_PER_PAGE = 5
 
 def register_user(user_id, username, first_name, last_name, group_id):
     # Register user if not exists
@@ -166,8 +167,7 @@ def myscore(update: Update, context: CallbackContext):
         update.message.reply_text("You are in the process of uploading points with excel file. Please upload xlsx, xls file format only. Use /finish_upload to cancel the process.")
         return
     user_id = update.message.from_user.id
-    date = datetime.datetime.now().strftime("%Y-%m-%d")
-    data = query("SELECT COALESCE(SUM(score), 0) as score, first_name, last_name FROM scores LEFT JOIN users ON scores.user_id = users.id WHERE users.user_id = %s AND scores.date = %s AND group_id = %s", (user_id, date, chat_id), single=True)
+    data = query("SELECT COALESCE(SUM(score), 0) as score, first_name, last_name FROM scores LEFT JOIN users ON scores.user_id = users.id WHERE users.user_id = %s AND group_id = %s", (user_id, chat_id), single=True)
     
     data_leaderboard = query(
         "SELECT u.username, COALESCE(SUM(s.score), 0) as total_points, u.user_id FROM users u "
@@ -186,31 +186,75 @@ def myscore(update: Update, context: CallbackContext):
     update.message.reply_text(msg)
 
 def leaderboard(update: Update, context: CallbackContext):
-    chat_id = update.message.chat_id
-    if chat_id > 0:
-        return 
-    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
-    if check_stage(update.message.from_user.id, update.message.chat.id) == 1:
-        update.message.reply_text("You are in the process of uploading points with excel file. Please upload xlsx, xls file format only. Use /finish_upload to cancel the process.")
-        return
+    page = 1
+    cut_data = MAX_LEADERBOARD_DATA_PER_PAGE
+    q = update.callback_query
+    if q is not None:
+        q.answer()
+        q_data = q.data
+        q_data = q_data.replace("callback_leaderboard_", "")
+        page = int(q_data)
+        cut_data = MAX_LEADERBOARD_DATA_PER_PAGE * page
+        chat_id = update.callback_query.message.chat_id
+    else:
+        chat_id = update.message.chat_id
+        if chat_id > 0:
+            return 
+        register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
+        if check_stage(update.message.from_user.id, update.message.chat.id) == 1:
+            update.message.reply_text("You are in the process of uploading points with excel file. Please upload xlsx, xls file format only. Use /finish_upload to cancel the process.")
+            return
     # Command to show leaderboard
     data = query(
         "SELECT u.username, COALESCE(SUM(s.score), 0) as total_points, `date` FROM users u "
         "LEFT JOIN scores s ON u.id = s.user_id"
         " WHERE group_id = %s"
-        " GROUP BY u.user_id ORDER BY total_points DESC, `date` DESC", params=(update.message.chat_id,), single=False
+        " GROUP BY u.user_id ORDER BY total_points DESC, `date` DESC", params=(chat_id,), single=False
     )
     leaderboard_text = "🏆 Leaderboard Group 🏆\n\n"
+    # dummy_users = [
+    #     '1. oyenbarbar98 - 600 points\n', 
+    #     '2. oyenbarbar98 - 600 points\n', 
+    # ]
+    
+    leaderboard_users = []
     if data is None:
         update.message.reply_text("Leaderboard is empty.")
     for i, row in enumerate(data, start=1):
         total_point = row['total_points']
         username = row['username'] if row['username'] else "Unknown"
-        if total_point > 1:
-            leaderboard_text += f"{i}. {username} - {total_point} points\n"
+        leaderboard_users.append(f"{i}. {username} - {total_point} points\n")
+    max_index = cut_data if len(leaderboard_users) > cut_data else len(leaderboard_users)
+    cutted_data = leaderboard_users[(page-1) * MAX_LEADERBOARD_DATA_PER_PAGE:max_index]
+    leaderboard_text += "".join(cutted_data)
+    # Show button if the data is greater than MAX_LEADERBOARD_DATA_PER_PAGE
+    if len(leaderboard_users) > MAX_LEADERBOARD_DATA_PER_PAGE and len(leaderboard_users) > cut_data:
+        keyboard = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton("Load More", callback_data=f"callback_leaderboard_{page + 1}"),
+                ]
+            ]
+        )
+        leaderboard_text += f"\nShow users {(page) * len(cutted_data)} of {len(leaderboard_users)}"
+        # If there is still more user show load more button
+        if q is not None:
+            q.edit_message_reply_markup(reply_markup=None)
+            context.bot.send_message(chat_id=chat_id, text=leaderboard_text, reply_markup=keyboard)
+        # If not then just show the text
         else:
-            leaderboard_text += f"{i}. {username} - {total_point} point\n"
-    update.message.reply_text(leaderboard_text)
+            update.message.reply_text(leaderboard_text, reply_markup=keyboard)
+        return
+    # If the event is not query callback handler
+    if q is None:
+        leaderboard_text += f"\nShow users {len(leaderboard_users)} of {len(leaderboard_users)}"
+        update.message.reply_text(leaderboard_text)
+        return
+    # If the event is query callback handler
+    else:   
+        leaderboard_text += f"\nShow users {len(leaderboard_users)} of {len(leaderboard_users)}"
+        q.edit_message_reply_markup(reply_markup=None)
+        context.bot.send_message(chat_id=chat_id, text=leaderboard_text)
 
 def handle_start(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
@@ -304,7 +348,7 @@ def export_scores(update: Update, context: CallbackContext):
 
     update.message.reply_document(document=open(filename, 'rb'))
 
-def make_referral(update: Update, context: CallbackContext):
+def create_referral(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     if chat_id > 0:
         return 
@@ -363,6 +407,13 @@ def upload_points(update: Update, context: CallbackContext):
         update.message.reply_text("Please upload xlsx, xls file format only to add points.")
         return
 
+def handle_query_callback(update: Update, context: CallbackContext):
+    q = update.callback_query
+    q.answer()
+    if q.data.startswith("callback_leaderboard_"):
+        leaderboard(update, context)
+        return
+
 def finish_upload(update: Update, conext: CallbackContext):
     chat_id = update.message.chat_id
     if chat_id > 0:
@@ -378,7 +429,7 @@ def finish_upload(update: Update, conext: CallbackContext):
         update.message.reply_text("You're not in the process of uploading points with excel file.")
 
 def main():
-    global MESSAGE_POINTS, MEDIA_POINTS, MAX_MESSAGE_POINTS, MAX_MEDIA_POINTS, REFERRAL_ACTIVE_DAYS, REFERRED_MIN_ACTIVATION, REFERRAL_POINTS, REFERRAL_LINK_ACTIVE_DAYS
+    global MESSAGE_POINTS, MEDIA_POINTS, MAX_MESSAGE_POINTS, MAX_MEDIA_POINTS, REFERRAL_ACTIVE_DAYS, REFERRED_MIN_ACTIVATION, REFERRAL_POINTS, REFERRAL_LINK_ACTIVE_DAYS, MAX_LEADERBOARD_DATA_PER_PAGE
     updater = Updater(token=os.getenv("TELEGRAM_BOT_TOKEN"), use_context=True)
     dp = updater.dispatcher
 
@@ -392,15 +443,17 @@ def main():
         REFERRED_MIN_ACTIVATION = int(bot_config['REFERRED_MIN_ACTIVATION'])
         REFERRAL_POINTS = int(bot_config['REFERRAL_POINTS'])
         REFERRAL_LINK_ACTIVE_DAYS = int(bot_config['REFERRAL_LINK_ACTIVE_DAYS'])
+        MAX_LEADERBOARD_DATA_PER_PAGE = int(bot_config['MAX_LEADERBOARD_DATA_PER_PAGE'])
 
     dp.add_handler(CommandHandler("start", handle_start))
     dp.add_handler(CommandHandler("myscore", myscore))
     dp.add_handler(CommandHandler("leaderboard", leaderboard))
     dp.add_handler(CommandHandler("export_scores", export_scores))
-    dp.add_handler(CommandHandler("make_referral", make_referral))
+    dp.add_handler(CommandHandler("create_referral", create_referral))
     dp.add_handler(CommandHandler("finish_upload", finish_upload))
     dp.add_handler(CommandHandler("upload_points", upload_points))
     dp.add_handler(CommandHandler("template_upload_points", template_upload_points))
+    dp.add_handler(CallbackQueryHandler(handle_query_callback))
     dp.add_handler(ChatJoinRequestHandler(handle_join_request))
     dp.add_handler(MessageHandler(Filters.text | Filters.photo | Filters.video | Filters.animation | Filters.document, handle_message))
     print("Running bot!")
