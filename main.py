@@ -417,12 +417,16 @@ def handle_query_callback(update: Update, context: CallbackContext):
         leaderboard(update, context)
         return
 
-def finish_upload(update: Update, conext: CallbackContext):
+def finish_upload(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     if chat_id > 0:
         return 
     register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat.id)
     
+    admins = context.bot.get_chat_administrators(chat_id)
+    if not any((admin.user.id == update.message.from_user.id and admin.status == "creator") or (admin.user.id == update.message.from_user.id and admin.status == "administrator") for admin in admins):
+        update.message.reply_text("You are not authorized to use this command.")
+        return
     if check_stage(update.message.from_user.id, update.message.chat.id) == 1:
         user = update.message.from_user
         update.message.reply_text("Upload file with excel format has been finished.")
