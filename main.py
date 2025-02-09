@@ -15,6 +15,7 @@ from stage import check_stage, upload_stage, finish_upload_stage
 import re
 import threading
 from function import check_whitelist_user, get_all_groups
+import traceback
 
 # Aturan poin
 MESSAGE_POINTS = 100
@@ -124,16 +125,17 @@ def process_upload_points(update: Update, context: CallbackContext):
         df = pd.read_excel(file_path)
         usernames = df["username"]
         points = df["points"]
+        group_id = context.user_data['group_id']
         for username, point in zip(usernames, points): 
             username = re.sub(r"^@\S+\s*", "", username)
             current_date = datetime.datetime.now().strftime("%Y-%m-%d")
             data_user = query("SELECT id FROM users WHERE username = %s", (username,), single=True)
             if data_user is not None:
-                command("INSERT INTO scores (user_id, message_id, activity_type, score, date, group_id) VALUES (%s, %s, %s, %s, %s, %s)", (data_user['id'], 0, 'extra point', point, current_date, update.message.chat_id))
+                command("INSERT INTO scores (user_id, message_id, activity_type, score, date, group_id) VALUES (%s, %s, %s, %s, %s, %s)", (data_user['id'], 0, 'extra point', point, current_date, group_id))
         os.remove(file_path)
         return True
     except Exception as e:
-        print(f"Error processing uploaded file: {e}")
+        traceback.print_exc()
         update.message.reply_text(f"Error processing uploaded file. File format is not valid. Try use the excel from /upload_points_template")
         return False
         
@@ -484,6 +486,7 @@ def handle_upload_points(update: Update, context: CallbackContext, group_id):
         chat_id = q.message.chat_id
     else:
         chat_id = update.message.from_user.id
+    context.user_data['group_id'] = group_id
     if check_stage(chat_id) == 1:
         if q is not None:
             context.bot.delete_message(chat_id=chat_id, message_id=q.message.message_id)
@@ -523,6 +526,7 @@ def finish_upload(update: Update, context: CallbackContext):
         user = update.message.from_user
         update.message.reply_text("Upload file with excel format has been finished.")
         finish_upload_stage(user.id)
+        context.user_data.clear()
         return
     else:
         update.message.reply_text("You're not in the process of uploading points with excel file.")
