@@ -444,7 +444,7 @@ def create_referral(update: Update, context: CallbackContext):
     # current_date = datetime.datetime.now()
     data = query("SELECT id FROM users WHERE user_id = %s", (update.message.from_user.id,), single=True)
     if command("INSERT INTO referral_links (user_id, link, group_id) VALUES (%s, %s, %s)", (data['id'], invite_link.invite_link, update.message.chat_id)) is not None:
-        update.message.reply_text(referral_message, parse_mode="Markdown")
+        update.message.reply_text(referral_message)
     else:
         update.message.reply_text("Failed to create referral link.")
 
