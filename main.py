@@ -144,7 +144,7 @@ def handle_message(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id  # ID Group or Chat
     message_id = update.message.message_id
 
-    # Make sure only able to run on group
+    
     if chat_id > 0:
         is_whitelist = check_whitelist_user(update.message.from_user.id)
         if not is_whitelist:
@@ -157,7 +157,7 @@ def handle_message(update: Update, context: CallbackContext):
             return
     if update.message.photo or update.message.video or update.message.animation or update.message.document:
         current_stage = check_stage(update.message.from_user.id)
-        if current_stage == 1 and update.message.document:
+        if current_stage == 1 and update.message.document and chat_id > 0:
             document = update.message.document
         
             # Get file name and MIME type
@@ -179,16 +179,17 @@ def handle_message(update: Update, context: CallbackContext):
             # if res == True:
             #     update.message.reply_text(f"File '{file_name}' is succesfully uploaded")
 
-        elif current_stage != 1:
+        elif current_stage != 1 or chat_id < 0:
             add_points(update, user.id, message_id, chat_id, "media", MEDIA_POINTS, MAX_MEDIA_POINTS)
         else:
             update.message.reply_text("The uploaded file is not an Excel file.")
             return
     else:
-        if check_stage(update.message.from_user.id) == 1:
+        if check_stage(update.message.from_user.id) == 1 and chat_id > 0:
             update.message.reply_text("You are in the process of uploading points with excel file. Please upload xlsx, xls file format only. Use /finish_upload to cancel the process.")
             return
-        add_points(update, user.id, message_id, chat_id, "message", MESSAGE_POINTS, MAX_MESSAGE_POINTS)
+        elif chat_id < 0:
+            add_points(update, user.id, message_id, chat_id, "message", MESSAGE_POINTS, MAX_MESSAGE_POINTS)
 
 def myscore(update: Update, context: CallbackContext):
     # Command to show users score
@@ -196,9 +197,6 @@ def myscore(update: Update, context: CallbackContext):
     if chat_id > 0:
         return 
     register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
-    if check_stage(update.message.from_user.id) == 1:
-        update.message.reply_text("You are in the process of uploading points with excel file. Please upload xlsx, xls file format only. Use /finish_upload to cancel the process.")
-        return
     user_id = update.message.from_user.id
     data = query("SELECT COALESCE(SUM(score), 0) as score, first_name, last_name FROM scores LEFT JOIN users ON scores.user_id = users.id WHERE users.user_id = %s AND group_id = %s", (user_id, chat_id), single=True)
     
@@ -234,9 +232,6 @@ def leaderboard(update: Update, context: CallbackContext):
         if chat_id > 0:
             return 
         register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
-        if check_stage(update.message.from_user.id) == 1:
-            update.message.reply_text("You are in the process of uploading points with excel file. Please upload xlsx, xls file format only. Use /finish_upload to cancel the process.")
-            return
     # Command to show leaderboard
     data = query(
         "SELECT u.username, COALESCE(SUM(s.score), 0) as total_points, `date` FROM users u "
@@ -298,10 +293,6 @@ def handle_start(update: Update, context: CallbackContext):
             return
         update.message.reply_text("Hello! 👋🏽\n\nTelegram Bot Commands: \n\nExport Score - /export_scores\nUpload Points - /upload_points\nDownload Upload Points Template /upload_points_template")
         return 
-    
-    if check_stage(update.message.from_user.id) == 1:
-        update.message.reply_text("You are in the process of uploading points with excel file. Please upload xlsx, xls file format only. Use /finish_upload to cancel the process.")
-        return
     
     register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
     msg = f"Hello {update.message.from_user.username} 👋🏽\n\nEngagement Tracking Commands: \n\nCheck Progress - /myscore🥇\nLeaderboard - /leaderboard 📊\nInvite Friends - /create_referral👥"
@@ -436,9 +427,6 @@ def create_referral(update: Update, context: CallbackContext):
     if chat_id > 0:
         return 
     register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
-    if check_stage(update.message.from_user.id) == 1:
-        update.message.reply_text("You are in the process of uploading points with excel file. Please upload xlsx, xls file format only. Use /finish_upload to cancel the process.")
-        return
     invite_link = context.bot.create_chat_invite_link(chat_id=update.message.chat_id, creates_join_request=True)
     referral_message = f"Here is your referral link: {invite_link.invite_link}\n"
     # current_date = datetime.datetime.now()
