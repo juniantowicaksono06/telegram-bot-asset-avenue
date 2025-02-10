@@ -226,9 +226,6 @@ def myscore(update: Update, context: CallbackContext):
     update.message.reply_text(msg)
 
 def leaderboard(update: Update, context: CallbackContext):
-    user = update.message.from_user
-    if user.is_bot:
-        return
     page = 1
     cut_data = MAX_LEADERBOARD_DATA_PER_PAGE
     q = update.callback_query
@@ -239,10 +236,16 @@ def leaderboard(update: Update, context: CallbackContext):
         page = int(q_data)
         cut_data = MAX_LEADERBOARD_DATA_PER_PAGE * page
         chat_id = update.callback_query.message.chat_id
+        user = update.callback_query.from_user
+        if user.is_bot:
+            return
     else:
         chat_id = update.message.chat_id
         if chat_id > 0:
             return 
+        user = update.message.from_user
+        if user.is_bot:
+            return
         register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
     # Command to show leaderboard
     data = query(
