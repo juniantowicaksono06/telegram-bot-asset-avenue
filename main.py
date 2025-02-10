@@ -236,7 +236,6 @@ def leaderboard(update: Update, context: CallbackContext):
     q = update.callback_query
     if q is None:
         chat_id = update.message.chat_id
-        print(chat_id)
         data = query(
             "SELECT u.username, COALESCE(SUM(s.score), 0) as total_points, `date` FROM users u "
             "LEFT JOIN scores s ON u.id = s.user_id"
@@ -568,6 +567,7 @@ def finish_upload(update: Update, context: CallbackContext):
         update.message.reply_text("You're not in the process of uploading points with excel file.")
 
 def welcome(update: Update, context: CallbackContext):
+    print(f"WELCOME {update.message.from_user.username}")
     register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id, context)
 
 def main():
