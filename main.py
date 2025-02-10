@@ -231,76 +231,86 @@ def myscore(update: Update, context: CallbackContext):
 
 def leaderboard(update: Update, context: CallbackContext):
     page = 1
-    cut_data = MAX_LEADERBOARD_DATA_PER_PAGE
+    max_index = 5
+    leaderboard_text = "🏆 Leaderboard 🏆\n\n"
     q = update.callback_query
-    if q is not None:
+    if q is None:
+        chat_id = update.message.chat_id
+        print(chat_id)
+        data = query(
+            "SELECT u.username, COALESCE(SUM(s.score), 0) as total_points, `date` FROM users u "
+            "LEFT JOIN scores s ON u.id = s.user_id"
+            " WHERE group_id = %s"
+            " GROUP BY u.user_id ORDER BY total_points DESC, `date` DESC", params=(chat_id,), single=False
+        )
+        if data is None:
+            update.message.reply_text("Leaderboard is empty.")
+            return
+        elif len(data) == 0:
+            update.message.reply_text("Leaderboard is empty.")
+            return
+        leaderboard_users = []
+        for i, row in enumerate(data, start=1):
+            total_point = row['total_points']
+            username = row['username'] if row['username'] else "Unknown"
+            leaderboard_users.append(f"{i}. {username} - {total_point} points\n")
+
+        cutted_data = leaderboard_users[:max_index]
+        leaderboard_text += "".join(cutted_data)
+        if len(leaderboard_users) > MAX_LEADERBOARD_DATA_PER_PAGE:
+            keyboard = InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton("Load More", callback_data=f"callback_leaderboard_{page + 1}"),
+                    ]
+                ]
+            )
+            leaderboard_text += f"\nShow users {(page) * len(cutted_data)} of {len(leaderboard_users)}"
+            update.message.reply_text(leaderboard_text, reply_markup=keyboard)
+        else:
+            leaderboard_text += f"\nShow users {len(leaderboard_users)} of {len(leaderboard_users)}"
+            update.message.reply_text(leaderboard_text)
+    else:
         q.answer()
         q_data = q.data
         q_data = q_data.replace("callback_leaderboard_", "")
         page = int(q_data)
-        cut_data = MAX_LEADERBOARD_DATA_PER_PAGE * page
+        start_index = 5 + (page - 1) * 10
+        end_index = start_index + 10
         chat_id = update.callback_query.message.chat_id
-        user = update.callback_query.from_user
-        if user.is_bot:
-            return
-    else:
-        chat_id = update.message.chat_id
-        if chat_id > 0:
-            return 
-        user = update.message.from_user
-        if user.is_bot:
-            return
-        register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id, context)
-    # Command to show leaderboard
-    data = query(
-        "SELECT u.username, COALESCE(SUM(s.score), 0) as total_points, `date` FROM users u "
-        "LEFT JOIN scores s ON u.id = s.user_id"
-        " WHERE group_id = %s"
-        " GROUP BY u.user_id ORDER BY total_points DESC, `date` DESC", params=(chat_id,), single=False
-    )
-    leaderboard_text = "🏆 Leaderboard 🏆\n\n"
-    
-    leaderboard_users = []
-    if data is None:
-        update.message.reply_text("Leaderboard is empty.")
-        return
-    for i, row in enumerate(data, start=1):
-        total_point = row['total_points']
-        username = row['username'] if row['username'] else "Unknown"
-        leaderboard_users.append(f"{i}. {username} - {total_point} points\n")
-    
-    max_index = cut_data if len(leaderboard_users) > cut_data else len(leaderboard_users)
-    cutted_data = leaderboard_users[(page-1) * MAX_LEADERBOARD_DATA_PER_PAGE:max_index]
-    leaderboard_text += "".join(cutted_data)
-    # Show button if the data is greater than MAX_LEADERBOARD_DATA_PER_PAGE
-    if len(leaderboard_users) > MAX_LEADERBOARD_DATA_PER_PAGE and len(leaderboard_users) > cut_data:
-        keyboard = InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton("Load More", callback_data=f"callback_leaderboard_{page + 1}"),
-                ]
-            ]
+        data = query(
+            "SELECT u.username, COALESCE(SUM(s.score), 0) as total_points, `date` FROM users u "
+            "LEFT JOIN scores s ON u.id = s.user_id"
+            " WHERE group_id = %s"
+            " GROUP BY u.user_id ORDER BY total_points DESC, `date` DESC", params=(chat_id,), single=False
         )
-        leaderboard_text += f"\nShow users {(page) * len(cutted_data)} of {len(leaderboard_users)}"
-        # If there is still more user show load more button
-        if q is not None:
+        if data is None:
+            update.message.reply_text("Leaderboard is empty.")
+            return
+        elif len(data) == 0:
+            update.message.reply_text("Leaderboard is empty.")
+            return
+        leaderboard_users = []
+        for i, row in enumerate(data, start=1):
+            total_point = row['total_points']
+            username = row['username'] if row['username'] else "Unknown"
+            leaderboard_users.append(f"{i}. {username} - {total_point} points\n")
+
+        cutted_data = leaderboard_users[start_index:end_index]
+        leaderboard_text += "".join(cutted_data)
+        if end_index >= len(leaderboard_users):
+            q.edit_message_reply_markup(reply_markup=None)
+            context.bot.send_message(chat_id=chat_id, text=leaderboard_text)
+        else:
+            keyboard = InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton("Load More", callback_data=f"callback_leaderboard_{page + 1}"),
+                    ]
+                ]
+            )
             q.edit_message_reply_markup(reply_markup=None)
             context.bot.send_message(chat_id=chat_id, text=leaderboard_text, reply_markup=keyboard)
-        # If not then just show the text
-        else:
-            update.message.reply_text(leaderboard_text, reply_markup=keyboard)
-        return
-    # If the event is not query callback handler
-    if q is None:
-        leaderboard_text += f"\nShow users {len(leaderboard_users)} of {len(leaderboard_users)}"
-        update.message.reply_text(leaderboard_text)
-        return
-    # If the event is query callback handler
-    else:   
-        leaderboard_text += f"\nShow users {len(leaderboard_users)} of {len(leaderboard_users)}"
-        q.edit_message_reply_markup(reply_markup=None)
-        context.bot.send_message(chat_id=chat_id, text=leaderboard_text)
-
 def handle_start(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     user = update.message.from_user
