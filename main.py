@@ -61,7 +61,9 @@ def get_daily_points(user_id, activity_type, group_id):
     return data['score']
 
 def add_points(update: Update, user_id, message_id, group_id, activity_type, points, max_points):
-    """Tambahkan poin ke database dengan batas maksimal per hari."""
+    user = update.message.from_user
+    if user.is_bot:
+        return
     current_points = int(get_daily_points(user_id, activity_type, update.message.chat_id))
     # Check if user is already referred
     referred = query("SELECT referrals.id, status, referred_id, referrer_id, referrals.created_at, group_id, DATE_FORMAT(DATE_ADD(referrals.created_at, INTERVAL 10 DAY), '%Y-%m-%d') as last_date FROM referrals LEFT JOIN referral_links ON referrals.link_id = referral_links.id WHERE referred_id = %s AND status = 0 AND group_id = %s", (user_id, group_id), single=True)
@@ -145,6 +147,8 @@ def handle_message(update: Update, context: CallbackContext):
     user = update.message.from_user
     chat_id = update.message.chat_id  # ID Group or Chat
     message_id = update.message.message_id
+    if user.is_bot:
+        return
 
     
     if chat_id > 0:
@@ -194,6 +198,9 @@ def handle_message(update: Update, context: CallbackContext):
             add_points(update, user.id, message_id, chat_id, "message", MESSAGE_POINTS, MAX_MESSAGE_POINTS)
 
 def myscore(update: Update, context: CallbackContext):
+    user = update.message.from_user
+    if user.is_bot:
+        return
     # Command to show users score
     chat_id = update.message.chat_id
     if chat_id > 0:
@@ -219,6 +226,9 @@ def myscore(update: Update, context: CallbackContext):
     update.message.reply_text(msg)
 
 def leaderboard(update: Update, context: CallbackContext):
+    user = update.message.from_user
+    if user.is_bot:
+        return
     page = 1
     cut_data = MAX_LEADERBOARD_DATA_PER_PAGE
     q = update.callback_query
@@ -246,6 +256,7 @@ def leaderboard(update: Update, context: CallbackContext):
     leaderboard_users = []
     if data is None:
         update.message.reply_text("Leaderboard is empty.")
+        return
     for i, row in enumerate(data, start=1):
         total_point = row['total_points']
         username = row['username'] if row['username'] else "Unknown"
@@ -285,6 +296,9 @@ def leaderboard(update: Update, context: CallbackContext):
 
 def handle_start(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
+    user = update.message.from_user
+    if user.is_bot:
+        return
     if chat_id > 0:
         is_whitelist = check_whitelist_user(update.message.from_user.id)
         if not is_whitelist:
@@ -428,6 +442,11 @@ def create_referral(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     if chat_id > 0:
         return 
+    
+    user = update.message.from_user
+    if user.is_bot:
+        return
+    
     register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
     invite_link = context.bot.create_chat_invite_link(chat_id=update.message.chat_id, creates_join_request=True)
     referral_message = f"Here is your referral link: {invite_link.invite_link}\n"
