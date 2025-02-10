@@ -241,7 +241,7 @@ def leaderboard(update: Update, context: CallbackContext):
         " WHERE group_id = %s"
         " GROUP BY u.user_id ORDER BY total_points DESC, `date` DESC", params=(chat_id,), single=False
     )
-    leaderboard_text = "🏆 Leaderboard Group 🏆\n\n"
+    leaderboard_text = "🏆 Leaderboard 🏆\n\n"
     
     leaderboard_users = []
     if data is None:
