@@ -14,7 +14,7 @@ load_dotenv()
 from stage import check_stage, upload_stage, finish_upload_stage
 import re
 import threading
-from function import check_whitelist_user, get_all_groups
+from function import check_whitelist_user, get_all_groups, is_admin
 import traceback
 
 # Aturan poin
@@ -28,7 +28,7 @@ REFERRAL_POINTS = 200
 MAX_LEADERBOARD_DATA_PER_PAGE = 5
 MAX_REFERRAL_PER_DAY = 2
 
-def register_user(user_id, username, first_name, last_name, group_id):
+def register_user(user_id, username, first_name, last_name, group_id, context):
     # Register group if not exists
     data_group = query("SELECT group_id FROM `groups` WHERE group_id = %s", (group_id,), single=True)
     if(data_group) is None:
@@ -44,14 +44,15 @@ def register_user(user_id, username, first_name, last_name, group_id):
             current_date = datetime.datetime.now().strftime("%Y-%m-%d")
             data_user = query("SELECT id FROM users WHERE user_id = %s", (user_id,), single=True)
             print(data_user['id'], 0, 'registration', 100, current_date, group_id)
-            command("INSERT INTO scores (user_id, message_id, activity_type, score, date, group_id) VALUES (%s, %s, %s, %s, %s, %s)", (data_user['id'], 0, 'registration', 100, current_date, group_id))       
+            if not is_admin(group_id, user_id, context):
+                command("INSERT INTO scores (user_id, message_id, activity_type, score, date, group_id) VALUES (%s, %s, %s, %s, %s, %s)", (data_user['id'], 0, 'registration', 100, current_date, group_id))       
     else:
         data = query("SELECT users.user_id FROM users LEFT JOIN scores ON users.id = scores.user_id WHERE users.user_id = %s AND activity_type = 'registration' AND group_id = %s", (user_id, group_id), single=True)
         if data is None:
             current_date = datetime.datetime.now().strftime("%Y-%m-%d")
             data_user = query("SELECT id FROM users WHERE user_id = %s", (user_id,), single=True)
-            print(data_user['id'], 0, 'registration', 100, current_date, group_id)
-            command("INSERT INTO scores (user_id, message_id, activity_type, score, date, group_id) VALUES (%s, %s, %s, %s, %s, %s)", (data_user['id'], 0, 'registration', 100, current_date, group_id))       
+            if not is_admin(group_id, user_id, context):
+                command("INSERT INTO scores (user_id, message_id, activity_type, score, date, group_id) VALUES (%s, %s, %s, %s, %s, %s)", (data_user['id'], 0, 'registration', 100, current_date, group_id))       
     return True
 
 def get_daily_points(user_id, activity_type, group_id):
@@ -60,7 +61,7 @@ def get_daily_points(user_id, activity_type, group_id):
     print(data)
     return data['score']
 
-def add_points(update: Update, user_id, message_id, group_id, activity_type, points, max_points):
+def add_points(update: Update, user_id, message_id, group_id, activity_type, points, max_points, context: CallbackContext):
     user = update.message.from_user
     if user.is_bot:
         return
@@ -101,16 +102,19 @@ def add_points(update: Update, user_id, message_id, group_id, activity_type, poi
 
             elif referred_details['total_data'] + 1 >= REFERRED_MIN_ACTIVATION and insert_referral_detail is not None:
                 command("UPDATE referrals SET status = %s WHERE referrer_id = %s", (1, referrer_id))
-                print((data_referrer['id'], 0, 'referral', REFERRAL_POINTS, current_date_now.strftime("%Y-%m-%d %H:%M:%S"), group_id))
-                command("INSERT INTO scores (user_id, message_id, activity_type, score, date, group_id) VALUES (%s, %s, %s, %s, %s, %s)", (data_referrer['id'], 0, 'referral', REFERRAL_POINTS, current_date_now.strftime("%Y-%m-%d %H:%M:%S"), group_id))
-                update.message.reply_text(f"{data_referrer['username']} earned {REFERRAL_POINTS} points.")
+                if not is_admin(group_id, user_id, context):
+                    print((data_referrer['id'], 0, 'referral', REFERRAL_POINTS, current_date_now.strftime("%Y-%m-%d %H:%M:%S"), group_id))
+                    command("INSERT INTO scores (user_id, message_id, activity_type, score, date, group_id) VALUES (%s, %s, %s, %s, %s, %s)", (data_referrer['id'], 0, 'referral', REFERRAL_POINTS, current_date_now.strftime("%Y-%m-%d %H:%M:%S"), group_id))
+                    update.message.reply_text(f"{data_referrer['username']} earned {REFERRAL_POINTS} points.")
                 
     if current_points is not None:
         if current_points < max_points:
             new_points = min(points, max_points - current_points)
             current_date = current_date_now.strftime("%Y-%m-%d")
-            data_user = query("SELECT id FROM users WHERE user_id = %s", (user_id,), single=True)
-            command("INSERT INTO scores (user_id, message_id, activity_type, score, date, group_id) VALUES (%s, %s, %s, %s, %s, %s)", (data_user['id'], message_id, activity_type, new_points, current_date, group_id))
+            
+            if not is_admin(group_id, user_id, context):
+                data_user = query("SELECT id FROM users WHERE user_id = %s", (user_id,), single=True)
+                command("INSERT INTO scores (user_id, message_id, activity_type, score, date, group_id) VALUES (%s, %s, %s, %s, %s, %s)", (data_user['id'], message_id, activity_type, new_points, current_date, group_id))
 
 def process_upload_points(update: Update, context: CallbackContext):
     # Process uploaded file
@@ -157,7 +161,7 @@ def handle_message(update: Update, context: CallbackContext):
             update.message.reply_text("You are not authorized to use this bot.")
             return
     else:
-        res = register_user(user.id, user.username, user.first_name, user.last_name, chat_id)
+        res = register_user(user.id, user.username, user.first_name, user.last_name, chat_id, context)
         if res is None:
             print("Failed to register user!")
             return
@@ -186,7 +190,7 @@ def handle_message(update: Update, context: CallbackContext):
             #     update.message.reply_text(f"File '{file_name}' is succesfully uploaded")
 
         elif current_stage != 1 or chat_id < 0:
-            add_points(update, user.id, message_id, chat_id, "media", MEDIA_POINTS, MAX_MEDIA_POINTS)
+            add_points(update, user.id, message_id, chat_id, "media", MEDIA_POINTS, MAX_MEDIA_POINTS, context)
         else:
             update.message.reply_text("The uploaded file is not an Excel file.")
             return
@@ -195,7 +199,7 @@ def handle_message(update: Update, context: CallbackContext):
             update.message.reply_text("You are in the process of uploading points with excel file. Please upload xlsx, xls file format only. Use /finish_upload to cancel the process.")
             return
         elif chat_id < 0:
-            add_points(update, user.id, message_id, chat_id, "message", MESSAGE_POINTS, MAX_MESSAGE_POINTS)
+            add_points(update, user.id, message_id, chat_id, "message", MESSAGE_POINTS, MAX_MESSAGE_POINTS, context)
 
 def myscore(update: Update, context: CallbackContext):
     user = update.message.from_user
@@ -205,7 +209,7 @@ def myscore(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     if chat_id > 0:
         return 
-    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
+    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id, context)
     user_id = update.message.from_user.id
     data = query("SELECT COALESCE(SUM(score), 0) as score, first_name, last_name FROM scores LEFT JOIN users ON scores.user_id = users.id WHERE users.user_id = %s AND group_id = %s", (user_id, chat_id), single=True)
     
@@ -246,7 +250,7 @@ def leaderboard(update: Update, context: CallbackContext):
         user = update.message.from_user
         if user.is_bot:
             return
-        register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
+        register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id, context)
     # Command to show leaderboard
     data = query(
         "SELECT u.username, COALESCE(SUM(s.score), 0) as total_points, `date` FROM users u "
@@ -313,7 +317,7 @@ def handle_start(update: Update, context: CallbackContext):
         update.message.reply_text("Hello! 👋🏽\n\nTelegram Bot Commands: \n\nExport Score - /export_scores\nUpload Points - /upload_points\nDownload Upload Points Template /upload_points_template")
         return 
     
-    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
+    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id, context)
     msg = f"Hello {update.message.from_user.username} 👋🏽\n\nEngagement Tracking Commands: \n\nCheck Progress - /myscore🥇\nLeaderboard - /leaderboard 📊\nInvite Friends - /create_referral👥"
     update.message.reply_text(msg)
 
@@ -450,7 +454,7 @@ def create_referral(update: Update, context: CallbackContext):
     if user.is_bot:
         return
     
-    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id)
+    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id, context)
     invite_link = context.bot.create_chat_invite_link(chat_id=update.message.chat_id, creates_join_request=True)
     referral_message = f"Here is your referral link: {invite_link.invite_link}\n"
     # current_date = datetime.datetime.now()
@@ -466,7 +470,7 @@ def handle_join_request(update: Update, context: CallbackContext):
     invite_link = join_request.invite_link.invite_link
     data = query("SELECT referral_links.id, users.user_id FROM referral_links LEFT JOIN users ON referral_links.user_id = users.id WHERE link = %s and group_id = %s", (invite_link, join_request.chat.id), single=True)
     if data is not None:
-        register_user(join_request.from_user.id, join_request.from_user.username, join_request.from_user.first_name, join_request.from_user.last_name, join_request.chat.id)
+        register_user(join_request.from_user.id, join_request.from_user.username, join_request.from_user.first_name, join_request.from_user.last_name, join_request.chat.id, context)
         check_another_referral = query("SELECT COUNT(referrals.id) as total_data FROM referrals LEFT JOIN referral_links ON referrals.link_id = referral_links.id WHERE referred_id = %s and group_id = %s", (user.id, join_request.chat.id), single=True)
         if check_another_referral['total_data'] == 0:
             command("INSERT INTO referrals (referrer_id, referred_id, link_id) VALUES (%s, %s, %s)", (data['user_id'], user.id, data['id'])) # Join with referrer link
@@ -553,6 +557,9 @@ def finish_upload(update: Update, context: CallbackContext):
     else:
         update.message.reply_text("You're not in the process of uploading points with excel file.")
 
+def welcome(update: Update, context: CallbackContext):
+    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id, context)
+
 def main():
     global MESSAGE_POINTS, MEDIA_POINTS, MAX_MESSAGE_POINTS, MAX_MEDIA_POINTS, REFERRAL_ACTIVE_DAYS, REFERRED_MIN_ACTIVATION, REFERRAL_POINTS, MAX_LEADERBOARD_DATA_PER_PAGE, MAX_REFERRAL_PER_DAY
     updater = Updater(token=os.getenv("TELEGRAM_BOT_TOKEN"), use_context=True)
@@ -581,6 +588,7 @@ def main():
     dp.add_handler(CallbackQueryHandler(handle_query_callback))
     dp.add_handler(ChatJoinRequestHandler(handle_join_request))
     dp.add_handler(MessageHandler(Filters.text | Filters.photo | Filters.video | Filters.animation | Filters.document, handle_message))
+    dp.add_handler(MessageHandler(Filters.status_update.new_chat_members, welcome))
     print("Running bot!")
     updater.start_polling()
     updater.idle()
