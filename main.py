@@ -91,7 +91,9 @@ def add_points(update: Update, user_id, message_id, group_id, activity_type, poi
         else:
             print(f"GOT A REFERRAL FOR USER {data_referrer['username']}")
             insert_referral_detail = command("INSERT INTO referral_details (referral_id, `date`) VALUES(%s, %s)", (id, date1))
-            max_referred = query("SELECT COUNT(referral_details.referral_id) as total_data FROM referrals LEFT JOIN referral_links ON referrals.link_id = referral_links.id LEFT JOIN referral_details ON referrals.id = referral_details.referral_id WHERE referred_id = %s AND group_id = %s", (referred_id, group_id), single=True)
+            max_referred_start_date = datetime.datetime.now().strftime("%Y-%m-%d") + " 00:00:00"
+            max_referred_end_date = datetime.datetime.now().strftime("%Y-%m-%d") + " 23:59:59"
+            max_referred = query("SELECT COUNT(referral_details.referral_id) as total_data FROM referrals LEFT JOIN referral_links ON referrals.link_id = referral_links.id LEFT JOIN referral_details ON referrals.id = referral_details.referral_id WHERE referred_id = %s AND group_id = %s AND referral_details.date BETWEEN %s AND %s", (referred_id, group_id, max_referred_start_date, max_referred_end_date), single=True) # Query Get total referred today
 
             print(max_referred['total_data'] / REFERRED_MIN_ACTIVATION)
             print(MAX_REFERRAL_PER_DAY)
