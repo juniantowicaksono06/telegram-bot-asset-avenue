@@ -165,7 +165,7 @@ def handle_message(update: Update, context: CallbackContext):
         if res is None:
             print("Failed to register user!")
             return
-    if update.message.photo or update.message.video or update.message.animation or update.message.document:
+    if update.message.photo or update.message.video or update.message.animation or update.message.document or update.message.sticker:
         current_stage = check_stage(update.message.from_user.id)
         if current_stage == 1 and update.message.document and chat_id > 0:
             document = update.message.document
@@ -597,7 +597,7 @@ def main():
     dp.add_handler(CommandHandler("upload_points_template", upload_points_template))
     dp.add_handler(CallbackQueryHandler(handle_query_callback))
     dp.add_handler(ChatJoinRequestHandler(handle_join_request))
-    dp.add_handler(MessageHandler(Filters.text | Filters.photo | Filters.video | Filters.animation | Filters.document, handle_message))
+    dp.add_handler(MessageHandler(Filters.text | Filters.photo | Filters.video | Filters.animation | Filters.document | Filters.sticker, handle_message))
     dp.add_handler(MessageHandler(Filters.status_update.new_chat_members, welcome))
     print("Running bot!")
     updater.start_polling()
