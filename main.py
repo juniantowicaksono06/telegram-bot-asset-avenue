@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 from config.db import connect_to_mysql, command, query
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, ChatJoinRequestHandler, CallbackQueryHandler, PollAnswerHandler
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, ChatJoinRequestHandler, CallbackQueryHandler, PollAnswerHandler, ChatMemberHandler
 import os
 import pandas as pd
 
@@ -333,6 +333,7 @@ def leaderboard(update: Update, context: CallbackContext):
             q.edit_message_reply_markup(reply_markup=None)
             context.bot.send_message(chat_id=chat_id, text=leaderboard_text, reply_markup=keyboard)
 def handle_start(update: Update, context: CallbackContext):
+    print("LAH")
     chat_id = update.message.chat_id
     user = update.message.from_user
     if user.is_bot:
@@ -500,8 +501,8 @@ def handle_join_request(update: Update, context: CallbackContext):
     user = join_request.from_user
     invite_link = join_request.invite_link.invite_link
     data = query("SELECT referral_links.id, users.user_id FROM referral_links LEFT JOIN users ON referral_links.user_id = users.id WHERE link = %s and group_id = %s", (invite_link, join_request.chat.id), single=True)
+    register_user(join_request.from_user.id, join_request.from_user.username, join_request.from_user.first_name, join_request.from_user.last_name, join_request.chat.id, context)
     if data is not None:
-        register_user(join_request.from_user.id, join_request.from_user.username, join_request.from_user.first_name, join_request.from_user.last_name, join_request.chat.id, context)
         check_another_referral = query("SELECT COUNT(referrals.id) as total_data FROM referrals LEFT JOIN referral_links ON referrals.link_id = referral_links.id WHERE referred_id = %s and group_id = %s", (user.id, join_request.chat.id), single=True)
         if check_another_referral['total_data'] == 0:
             command("INSERT INTO referrals (referrer_id, referred_id, link_id) VALUES (%s, %s, %s)", (data['user_id'], user.id, data['id'])) # Join with referrer link
@@ -588,9 +589,26 @@ def finish_upload(update: Update, context: CallbackContext):
     else:
         update.message.reply_text("You're not in the process of uploading points with excel file.")
 
-def welcome(update: Update, context: CallbackContext):
-    print(f"WELCOME {update.message.from_user.username}")
-    register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id, context)
+# def welcome(update: Update, context: CallbackContext):
+#     print(f"WELCOME {update.message.from_user.username}")
+#     register_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name, update.message.from_user.last_name, update.message.chat_id, context)
+
+def welcome2(update: Update, context: CallbackContext):
+    chat_member = update.chat_member
+    if not chat_member:  # Prevents 'NoneType' errors
+        return
+
+    # Get the new member's status
+    new_status = chat_member.new_chat_member.status
+    print(new_status)
+    # Ensure the user actually joined
+    if new_status == "member":
+        chat = chat_member.chat
+        user = chat_member.new_chat_member.user
+        print("INSERT NEW MEMBER")
+        print(user.id, user.username, user.first_name, user.last_name, chat.id)
+        register_user(user.id, user.username, user.first_name, user.last_name, chat.id, context)
+        # context.bot.send_message(chat_id=chat.id, text=f"WELCOME {user.full_name}!")
 
 def main():
     global MESSAGE_POINTS, MEDIA_POINTS, MAX_MESSAGE_POINTS, MAX_MEDIA_POINTS, REFERRAL_ACTIVE_DAYS, REFERRED_MIN_ACTIVATION, REFERRAL_POINTS, MAX_LEADERBOARD_DATA_PER_PAGE, MAX_REFERRAL_PER_DAY
@@ -622,9 +640,10 @@ def main():
     dp.add_handler(PollAnswerHandler(poll_answer_handler))
     dp.add_handler(MessageHandler(Filters.text | Filters.photo | Filters.video | Filters.animation | Filters.document | Filters.sticker, handle_message))
     dp.add_handler(MessageHandler(Filters.poll, poll_post_handler))
-    dp.add_handler(MessageHandler(Filters.status_update.new_chat_members, welcome))
+    # dp.add_handler(MessageHandler(Filters.status_update.new_chat_members, welcome))
+    dp.add_handler(ChatMemberHandler(welcome2, ChatMemberHandler.ANY_CHAT_MEMBER))
     print("Running bot!")
-    updater.start_polling()
+    updater.start_polling(allowed_updates=Update.ALL_TYPES)
     updater.idle()
 
 
