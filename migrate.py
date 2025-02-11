@@ -87,6 +87,14 @@ CREATE TABLE IF NOT EXISTS `groups` (
     group_id BIGINT NOT NULL UNIQUE,
     group_name VARCHAR(255) NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS `polls` (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    poll_id BIGINT NOT NULL,
+    group_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 def migrate_database():

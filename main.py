@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 from config.db import connect_to_mysql, command, query
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, ChatJoinRequestHandler, CallbackQueryHandler
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, ChatJoinRequestHandler, CallbackQueryHandler, PollAnswerHandler
 import os
 import pandas as pd
 
@@ -14,7 +14,7 @@ load_dotenv()
 from stage import check_stage, upload_stage, finish_upload_stage
 import re
 import threading
-from function import check_whitelist_user, get_all_groups, is_admin
+from function import check_whitelist_user, get_all_groups, is_admin, insert_poll, get_poll_by_id
 import traceback
 
 # Aturan poin
@@ -27,7 +27,6 @@ REFERRED_MIN_ACTIVATION = 3
 REFERRAL_POINTS = 200
 MAX_LEADERBOARD_DATA_PER_PAGE = 5
 MAX_REFERRAL_PER_DAY = 2
-
 def register_user(user_id, username, first_name, last_name, group_id, context):
     # Register group if not exists
     data_group = query("SELECT group_id FROM `groups` WHERE group_id = %s", (group_id,), single=True)
@@ -144,6 +143,29 @@ def process_upload_points(update: Update, context: CallbackContext):
         traceback.print_exc()
         update.message.reply_text(f"Error processing uploaded file. File format is not valid. Try use the excel from /upload_points_template")
         return False
+        
+
+def poll_answer_handler(update: Update, context: CallbackContext):
+    user_id = update.poll_answer.user.id
+    poll_id = update.poll_answer.poll_id
+    user = update.poll_answer.user
+    if user.is_bot:
+        return
+    
+    
+    data = get_poll_by_id(poll_id)
+    if data is not None:
+        group_id = data['group_id']
+        if group_id < 0:
+            add_points(update, user_id, 0, group_id, "poll", MESSAGE_POINTS, MAX_MESSAGE_POINTS, context)
+
+def poll_post_handler(update: Update, context: CallbackContext):
+    if update.message and update.message.poll:
+        poll_id = update.message.poll.id
+        group_id = update.message.chat_id
+        chat_id = update.message.chat.id
+        insert_poll(poll_id, group_id, chat_id)
+        # polls[poll_id] = chat_id
         
 
 def handle_message(update: Update, context: CallbackContext):
@@ -597,7 +619,9 @@ def main():
     dp.add_handler(CommandHandler("upload_points_template", upload_points_template))
     dp.add_handler(CallbackQueryHandler(handle_query_callback))
     dp.add_handler(ChatJoinRequestHandler(handle_join_request))
+    dp.add_handler(PollAnswerHandler(poll_answer_handler))
     dp.add_handler(MessageHandler(Filters.text | Filters.photo | Filters.video | Filters.animation | Filters.document | Filters.sticker, handle_message))
+    dp.add_handler(MessageHandler(Filters.poll, poll_post_handler))
     dp.add_handler(MessageHandler(Filters.status_update.new_chat_members, welcome))
     print("Running bot!")
     updater.start_polling()

@@ -26,3 +26,9 @@ def is_admin(chat_id, user_id, context: CallbackContext):
         return True
     print("NOT ADMIN")
     return False
+
+def insert_poll(poll_id, group_id, user_id):
+    command("INSERT INTO `polls` (poll_id, group_id, user_id) VALUES (%s, %s, %s)", (poll_id, group_id, user_id))
+
+def get_poll_by_id(poll_id):
+    return query("SELECT * FROM `polls` WHERE poll_id = %s", (poll_id,), single=True)
