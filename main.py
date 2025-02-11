@@ -287,10 +287,10 @@ def leaderboard(update: Update, context: CallbackContext):
                     ]
                 ]
             )
-            leaderboard_text += f"\nShow users {(page) * len(cutted_data)} of {len(leaderboard_users)}"
+            # leaderboard_text += f"\nShow users {(page) * len(cutted_data)} of {len(leaderboard_users)}"
             update.message.reply_text(leaderboard_text, reply_markup=keyboard)
         else:
-            leaderboard_text += f"\nShow users {len(leaderboard_users)} of {len(leaderboard_users)}"
+            # leaderboard_text += f"\nShow users {len(leaderboard_users)} of {len(leaderboard_users)}"
             update.message.reply_text(leaderboard_text)
     else:
         q.answer()
@@ -320,7 +320,7 @@ def leaderboard(update: Update, context: CallbackContext):
         cutted_data = leaderboard_users[start_index:end_index]
         leaderboard_text += "".join(cutted_data)
         if end_index >= len(leaderboard_users):
-            leaderboard_text += f"\nShow users {len(leaderboard_users)} of {len(leaderboard_users)}"
+            # leaderboard_text += f"\nShow users {len(leaderboard_users)} of {len(leaderboard_users)}"
             q.edit_message_reply_markup(reply_markup=None)
             context.bot.send_message(chat_id=chat_id, text=leaderboard_text)
         else:
@@ -331,9 +331,19 @@ def leaderboard(update: Update, context: CallbackContext):
                     ]
                 ]
             )
-            leaderboard_text += f"\nShow users {(page) * len(cutted_data)} of {len(leaderboard_users)}"
+            # leaderboard_text += f"\nShow users {(page) * len(cutted_data)} of {(page) * len(cutted_data)}"
             q.edit_message_reply_markup(reply_markup=None)
-            context.bot.send_message(chat_id=chat_id, text=leaderboard_text, reply_markup=keyboard)
+            context.bot.send_message(chat_id=chat_id, text=leaderboard_text)
+            # keyboard = InlineKeyboardMarkup(
+            #     [
+            #         [
+            #             InlineKeyboardButton("Load More", callback_data=f"callback_leaderboard_{page + 1}"),
+            #         ]
+            #     ]
+            # )
+            # leaderboard_text += f"\nShow users {(page) * len(cutted_data)} of {len(leaderboard_users)}"
+            # q.edit_message_reply_markup(reply_markup=None)
+            # context.bot.send_message(chat_id=chat_id, text=leaderboard_text, reply_markup=keyboard)
 def handle_start(update: Update, context: CallbackContext):
     print("LAH")
     chat_id = update.message.chat_id
