@@ -275,7 +275,6 @@ def leaderboard(update: Update, context: CallbackContext):
             total_point = row['total_points']
             username = row['username'] if row['username'] else "Unknown"
             leaderboard_users.append(f"{i}. {username} - {total_point} points\n")
-
         cutted_data = leaderboard_users[:max_index]
         leaderboard_text += "".join(cutted_data)
         if len(leaderboard_users) > MAX_LEADERBOARD_DATA_PER_PAGE:
@@ -296,7 +295,7 @@ def leaderboard(update: Update, context: CallbackContext):
         q_data = q.data
         q_data = q_data.replace("callback_leaderboard_", "")
         page = int(q_data)
-        start_index = 5 + (page - 1) * 10
+        start_index = 5 + (page - 2) * 10
         end_index = start_index + 10
         chat_id = update.callback_query.message.chat_id
         data = query(
@@ -316,10 +315,10 @@ def leaderboard(update: Update, context: CallbackContext):
             total_point = row['total_points']
             username = row['username'] if row['username'] else "Unknown"
             leaderboard_users.append(f"{i}. {username} - {total_point} points\n")
-
         cutted_data = leaderboard_users[start_index:end_index]
         leaderboard_text += "".join(cutted_data)
         if end_index >= len(leaderboard_users):
+            leaderboard_text += f"\nShow users {len(leaderboard_users)} of {len(leaderboard_users)}"
             q.edit_message_reply_markup(reply_markup=None)
             context.bot.send_message(chat_id=chat_id, text=leaderboard_text)
         else:
@@ -330,6 +329,7 @@ def leaderboard(update: Update, context: CallbackContext):
                     ]
                 ]
             )
+            leaderboard_text += f"\nShow users {(page) * len(cutted_data)} of {len(leaderboard_users)}"
             q.edit_message_reply_markup(reply_markup=None)
             context.bot.send_message(chat_id=chat_id, text=leaderboard_text, reply_markup=keyboard)
 def handle_start(update: Update, context: CallbackContext):
