@@ -1,4 +1,8 @@
 from flask import Flask, jsonify, request
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from config.db import query
 
 app = Flask(__name__)
