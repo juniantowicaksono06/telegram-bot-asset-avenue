@@ -52,6 +52,10 @@ def register_user(user_id, username, first_name, last_name, group_id, context):
             data_user = query("SELECT id FROM users WHERE user_id = %s", (user_id,), single=True)
             if not is_admin(group_id, user_id, context):
                 command("INSERT INTO scores (user_id, message_id, activity_type, score, date, group_id) VALUES (%s, %s, %s, %s, %s, %s)", (data_user['id'], 0, 'registration', 100, current_date, group_id))       
+    # Update username if username, first_name, last_name is changed
+    data_user = query("SELECT id, username, first_name, last_name FROM users WHERE user_id = %s", (user_id,), single=True)
+    if data_user['username'] != username or data_user['first_name'] != first_name or data_user['last_name'] != last_name:
+        command("UPDATE users SET username = %s , first_name = %s, last_name = %s WHERE user_id = %s", (username, first_name, last_name, user_id))
     return True
 
 def get_daily_points(user_id, activity_type, group_id):
