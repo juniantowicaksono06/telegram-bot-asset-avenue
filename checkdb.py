@@ -3,6 +3,9 @@ from mysql.connector import Error
 import os
 import requests
 import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def send_telegram_message(message):
     TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
