@@ -31,4 +31,5 @@ def check_connection():
         send_telegram_message(f"❌ Database is not working! Time on server is: {str(datetime.datetime.now())}")
         pass
 
-check_connection()
+if __name__ == "__main__":
+    check_connection()
