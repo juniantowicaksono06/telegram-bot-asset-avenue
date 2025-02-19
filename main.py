@@ -130,7 +130,7 @@ def process_upload_points(update: Update, context: CallbackContext):
             os.mkdir(file_path)
         user = update.message.from_user
         now = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
-        uploaded_filename = f"uploaded_{user.id}_{update.message.chat_id}{now}.xlsx, xls"
+        uploaded_filename = f"uploaded_{user.id}_{update.message.chat_id}{now}.xlsx"
         file_path = os.path.join(file_path, uploaded_filename)
         document.get_file().download(file_path)
         df = pd.read_excel(file_path)
