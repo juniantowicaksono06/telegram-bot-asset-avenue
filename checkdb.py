@@ -29,9 +29,13 @@ def check_connection():
         )
 
         if connection.is_connected():
-            send_telegram_message(f"✅ Database is working correctly! Time on server is: {str(datetime.datetime.now())}")
+            now = datetime.datetime.now()
+            date_time = now.strftime("%Y-%m-%d %H:%M:%S")
+            send_telegram_message(f"✅ Database is working correctly! Time on server is: {date_time}")
     except Error as e:
-        send_telegram_message(f"❌ Database is not working! Time on server is: {str(datetime.datetime.now())}")
+        now = datetime.datetime.now()
+        date_time = now.strftime("%Y-%m-%d %H:%M:%S")
+        send_telegram_message(f"❌ Database is not working! Time on server is: {date_time}")
         pass
 
 if __name__ == "__main__":
