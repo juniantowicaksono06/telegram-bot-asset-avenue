@@ -487,6 +487,8 @@ def handle_export_scores(update: Update, context: CallbackContext, group_id):
     # Save the excel file
     wb.save(filename)
 
+    wb.close()
+
     if q is not None:
         context.bot.delete_message(chat_id=q.message.chat_id, message_id=q.message.message_id)
         context.bot.send_document(chat_id=q.message.chat_id, document=open(filename, 'rb'))
