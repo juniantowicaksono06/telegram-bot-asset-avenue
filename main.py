@@ -134,8 +134,16 @@ def process_upload_points(update: Update, context: CallbackContext):
         file_path = os.path.join(file_path, uploaded_filename)
         document.get_file().download(file_path)
         df = pd.read_excel(file_path)
+        df.columns = df.columns.str.lower()
         usernames = df["username"]
-        points = df["points"]
+        if "points" in df.columns:
+            points = df["points"]
+        elif "score" in df.columns:
+            points = df["score"]
+        elif "scores" in df.columns:
+            points = df["scores"]
+        else:
+            update.message.reply_text(f"Error processing uploaded file. File format is not valid. No 'points' column please make sure this column is exist or Try to use the excel from /upload_points_template")
         group_id = context.user_data['group_id']
         for username, point in zip(usernames, points): 
             username = re.sub(r"^@\S+\s*", "", username)
@@ -147,7 +155,7 @@ def process_upload_points(update: Update, context: CallbackContext):
         return True
     except Exception as e:
         traceback.print_exc()
-        update.message.reply_text(f"Error processing uploaded file. File format is not valid. Try use the excel from /upload_points_template")
+        update.message.reply_text(f"Error processing uploaded file. File format is not valid. Try to use the excel from /upload_points_template")
         return False
         
 
