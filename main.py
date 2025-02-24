@@ -144,11 +144,19 @@ def process_upload_points(update: Update, context: CallbackContext):
             points = df["scores"]
         else:
             update.message.reply_text(f"Error processing uploaded file. File format is not valid. No 'points' column please make sure this column is exist or Try to use the excel from /upload_points_template")
+        
+        if "userid" in df.columns:
+            user_ids = df["userid"]
+        else:
+            user_ids = df['username']
         group_id = context.user_data['group_id']
-        for username, point in zip(usernames, points): 
-            username = re.sub(r"^@\S+\s*", "", username)
+        for username, user_id, point in zip(usernames, user_ids, points): 
+            if username is not None and isinstance(username, str):
+                username = re.sub(r"^@\S+\s*", "", username)
+            else:
+                username = ""
             current_date = datetime.datetime.now().strftime("%Y-%m-%d")
-            data_user = query("SELECT id FROM users WHERE username = %s", (username,), single=True)
+            data_user = query("SELECT id FROM users WHERE username = %s OR user_id = %s", (username, user_id), single=True)
             if data_user is not None:
                 command("INSERT INTO scores (user_id, message_id, activity_type, score, date, group_id) VALUES (%s, %s, %s, %s, %s, %s)", (data_user['id'], 0, 'extra point', point, current_date, group_id))
         os.remove(file_path)
@@ -437,7 +445,7 @@ def handle_export_scores(update: Update, context: CallbackContext, group_id):
         return 
     date = datetime.datetime.now().strftime("%Y-%m-%d")
     data = query(
-        "SELECT u.username, first_name, last_name, COALESCE(SUM(s.score), 0) as total_points FROM users u "
+        "SELECT u.user_id, u.username, first_name, last_name, COALESCE(SUM(s.score), 0) as total_points FROM users u "
         "LEFT JOIN scores s ON u.id = s.user_id "
         " WHERE group_id = %s"
         " GROUP BY u.user_id ORDER BY total_points DESC, `date` DESC", dictionary=False, params=(group_id,), single=False
@@ -446,7 +454,7 @@ def handle_export_scores(update: Update, context: CallbackContext, group_id):
     if(not data):
         if q is not None:
             context.bot.delete_message(chat_id=q.message.chat_id, message_id=q.message.message_id)
-            context.bot.send_message(chat_id=chat_id, text="No data found!")
+            context.bot.send_message(chat_id=q.message.chat_id, text="No data found!")
         else:
             update.message.reply_text("No data found!")
         return
@@ -455,7 +463,7 @@ def handle_export_scores(update: Update, context: CallbackContext, group_id):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = f"User Scores {date}"
-    headers = ["Username", "First Name", "Last Name", "Score"]
+    headers = ["UserID", "Username", "First Name", "Last Name", "Score"]
 
     ws.append(headers)
 

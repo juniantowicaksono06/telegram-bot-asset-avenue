@@ -42,7 +42,7 @@ def query(sql, params=None, dictionary=True, single=False):
             return cursor.fetchone()
         return cursor.fetchall()
     except Exception as e:
-        print(f"Error executing SQL statement: {e}")
+        print(f"Error executing SQL query: {e}")
         return None
     finally:
         if conn is not None:
@@ -62,7 +62,7 @@ def command(sql, params=None):
         return cursor.lastrowid
     except Exception as e:
         conn.rollback()
-        print(f"Error executing SQL statement: {e}")
+        print(f"Error executing SQL command: {e}")
         return None
     finally:
         if conn is not None:
