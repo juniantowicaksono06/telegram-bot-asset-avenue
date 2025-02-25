@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 MEMORY_THRESHOLD_MB = int(os.getenv("LOW_MEMORY_CHECK_THRESHOLD"))
-CHECK_INTERVAL_SECONDS = 80  # Check every 80 seconds
+CHECK_INTERVAL_SECONDS = int(os.getenv("LOW_MEMORY_CHECK_INTERVAL"))  # Check every 80 seconds
 
 
 def send_telegram_message(message):
