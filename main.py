@@ -107,12 +107,12 @@ def add_points(update: Update, user_id, message_id, group_id, activity_type, poi
                 insert_referral_detail = command("INSERT INTO referral_details (referral_id, `date`) VALUES(%s, %s)", (id, date1))
                 max_referred_start_date = datetime.datetime.now().strftime("%Y-%m-%d") + " 00:00:00"
                 max_referred_end_date = datetime.datetime.now().strftime("%Y-%m-%d") + " 23:59:59"
-                max_referred = query("SELECT COUNT(referral_details.referral_id) as total_data FROM referrals LEFT JOIN referral_links ON referrals.link_id = referral_links.id LEFT JOIN referral_details ON referrals.id = referral_details.referral_id WHERE referred_id = %s AND group_id = %s AND referral_details.date BETWEEN %s AND %s", (referred_id, group_id, max_referred_start_date, max_referred_end_date), single=True) # Query Get total referred today
+                # max_referred = query("SELECT COUNT(referral_details.referral_id) as total_data FROM referrals LEFT JOIN referral_links ON referrals.link_id = referral_links.id LEFT JOIN referral_details ON referrals.id = referral_details.referral_id WHERE referred_id = %s AND group_id = %s AND referral_details.date BETWEEN %s AND %s", (referred_id, group_id, max_referred_start_date, max_referred_end_date), single=True) # Query Get total referred today
 
-                print(max_referred['total_data'] / REFERRED_MIN_ACTIVATION)
-                print("MAX CHECK", max_referred['total_data'] / REFERRED_MIN_ACTIVATION >= MAX_REFERRAL_PER_DAY)
+                # print(max_referred['total_data'] / REFERRED_MIN_ACTIVATION)
+                # print("MAX CHECK", max_referred['total_data'] / REFERRED_MIN_ACTIVATION >= MAX_REFERRAL_PER_DAY)
 
-                if max_referred['total_data'] / REFERRED_MIN_ACTIVATION >= MAX_REFERRAL_PER_DAY:
+                if referred_details['total_data'] / REFERRED_MIN_ACTIVATION >= MAX_REFERRAL_PER_DAY:
                     print(f"MAX REFFERAL REACHED FOR USER {data_referrer['username']}")
 
                 elif referred_details['total_data'] + 1 >= REFERRED_MIN_ACTIVATION and insert_referral_detail is not None:
