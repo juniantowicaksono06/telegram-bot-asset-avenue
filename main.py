@@ -83,34 +83,45 @@ def add_points(update: Update, user_id, message_id, group_id, activity_type, poi
         date1 = date_now.strftime("%Y-%m-%d %H:%M:%S")
         first_date_of_refered = created_at
         last_date_of_referred = referred['last_date']
-        referred_details = query("SELECT COUNT(referral_details.id) as total_data FROM referrals LEFT JOIN referral_details ON referrals.id = referral_details.referral_id WHERE referrals.id = %s AND `date` BETWEEN %s AND %s", (id, first_date_of_refered, last_date_of_referred), single=True)
-        print(last_date_of_referred)
+        referred_details = query("SELECT COUNT(referral_details.id) as total_data FROM referrals LEFT JOIN referral_details ON referrals.id = referral_details.referral_id WHERE referrals.referrer_id = %s AND `date` BETWEEN %s AND %s", (referrer_id, first_date_of_refered, last_date_of_referred), single=True)
+        print('date last referred', last_date_of_referred)
         data_referrer = query("SELECT id, username FROM users WHERE user_id = %s", (referrer_id,), single=True)
         date_obj = datetime.datetime.strptime(last_date_of_referred, "%Y-%m-%d")
         print(referred_details)
+        # Expired Referral
         if referred_details['total_data'] + 1 < REFERRED_MIN_ACTIVATION and date_now > date_obj:
             command("UPDATE referrals SET status = %s WHERE referrer_id = %s", (2, referrer_id))    
-        elif referred_details['total_data'] + 1 < MAX_REFERRAL_PER_DAY:
-            command("INSERT INTO referral_details (referral_id, `date`) VALUES(%s, %s)", (id, date1))
         else:
-            print(f"GOT A REFERRAL FOR USER {data_referrer['username']}")
-            insert_referral_detail = command("INSERT INTO referral_details (referral_id, `date`) VALUES(%s, %s)", (id, date1))
-            max_referred_start_date = datetime.datetime.now().strftime("%Y-%m-%d") + " 00:00:00"
-            max_referred_end_date = datetime.datetime.now().strftime("%Y-%m-%d") + " 23:59:59"
-            max_referred = query("SELECT COUNT(referral_details.referral_id) as total_data FROM referrals LEFT JOIN referral_links ON referrals.link_id = referral_links.id LEFT JOIN referral_details ON referrals.id = referral_details.referral_id WHERE referred_id = %s AND group_id = %s AND referral_details.date BETWEEN %s AND %s", (referred_id, group_id, max_referred_start_date, max_referred_end_date), single=True) # Query Get total referred today
+            start_date = date_now.strftime("%Y-%m-%d") + " 00:00:00"
+            end_date = date_now.strftime("%Y-%m-%d") + " 23:59:59"
+            referred_details = query("SELECT COUNT(referral_details.id) as total_data FROM referrals LEFT JOIN referral_details ON referrals.id = referral_details.referral_id WHERE referrals.referrer_id = %s AND `date` BETWEEN %s AND %s", (referrer_id, start_date, end_date), single=True)
+            print("start_date", start_date)
+            print("end_date", end_date)
+            print('referred_details', referred_details)
+            print('referred_min_activation', REFERRED_MIN_ACTIVATION)
+            print('result', (referred_details['total_data']) + 1 % REFERRED_MIN_ACTIVATION)
+            # Insert referral details
+            if (referred_details['total_data'] + 1) % REFERRED_MIN_ACTIVATION != 0 and referred_details['total_data'] / REFERRED_MIN_ACTIVATION < MAX_REFERRAL_PER_DAY:
+                command("INSERT INTO referral_details (referral_id, `date`) VALUES(%s, %s)", (id, date1))
+            else:
+                insert_referral_detail = command("INSERT INTO referral_details (referral_id, `date`) VALUES(%s, %s)", (id, date1))
+                max_referred_start_date = datetime.datetime.now().strftime("%Y-%m-%d") + " 00:00:00"
+                max_referred_end_date = datetime.datetime.now().strftime("%Y-%m-%d") + " 23:59:59"
+                max_referred = query("SELECT COUNT(referral_details.referral_id) as total_data FROM referrals LEFT JOIN referral_links ON referrals.link_id = referral_links.id LEFT JOIN referral_details ON referrals.id = referral_details.referral_id WHERE referred_id = %s AND group_id = %s AND referral_details.date BETWEEN %s AND %s", (referred_id, group_id, max_referred_start_date, max_referred_end_date), single=True) # Query Get total referred today
 
-            print(max_referred['total_data'] / REFERRED_MIN_ACTIVATION)
-            print(MAX_REFERRAL_PER_DAY)
+                print(max_referred['total_data'] / REFERRED_MIN_ACTIVATION)
+                print("MAX CHECK", max_referred['total_data'] / REFERRED_MIN_ACTIVATION >= MAX_REFERRAL_PER_DAY)
 
-            if max_referred['total_data'] / REFERRED_MIN_ACTIVATION > MAX_REFERRAL_PER_DAY:
-                print(f"MAX REFFERAL REACHED FOR USER {data_referrer['username']}")
+                if max_referred['total_data'] / REFERRED_MIN_ACTIVATION >= MAX_REFERRAL_PER_DAY:
+                    print(f"MAX REFFERAL REACHED FOR USER {data_referrer['username']}")
 
-            elif referred_details['total_data'] + 1 >= REFERRED_MIN_ACTIVATION and insert_referral_detail is not None:
-                command("UPDATE referrals SET status = %s WHERE referrer_id = %s", (1, referrer_id))
-                if not is_admin(group_id, user_id, context):
-                    print((data_referrer['id'], 0, 'referral', REFERRAL_POINTS, current_date_now.strftime("%Y-%m-%d %H:%M:%S"), group_id))
-                    command("INSERT INTO scores (user_id, message_id, activity_type, score, date, group_id) VALUES (%s, %s, %s, %s, %s, %s)", (data_referrer['id'], 0, 'referral', REFERRAL_POINTS, current_date_now.strftime("%Y-%m-%d %H:%M:%S"), group_id))
-                    update.message.reply_text(f"{data_referrer['username']} earned {REFERRAL_POINTS} points.")
+                elif referred_details['total_data'] + 1 >= REFERRED_MIN_ACTIVATION and insert_referral_detail is not None:
+                    print(f"GOT A REFERRAL FOR USER {data_referrer['username']}")
+                    command("UPDATE referrals SET status = %s WHERE referrer_id = %s", (1, referrer_id))
+                    if not is_admin(group_id, user_id, context):
+                        print((data_referrer['id'], 0, 'referral', REFERRAL_POINTS, current_date_now.strftime("%Y-%m-%d %H:%M:%S"), group_id))
+                        command("INSERT INTO scores (user_id, message_id, activity_type, score, date, group_id) VALUES (%s, %s, %s, %s, %s, %s)", (data_referrer['id'], 0, 'referral', REFERRAL_POINTS, current_date_now.strftime("%Y-%m-%d %H:%M:%S"), group_id))
+                        update.message.reply_text(f"{data_referrer['username']} earned {REFERRAL_POINTS} points.")
                 
     if current_points is not None:
         if current_points < max_points:
